@@ -1,14 +1,13 @@
 import Fastify from 'fastify';
+import cors from '@fastify/cors';       // ← 追加
 import { Server } from 'socket.io';
-import { createServer } from 'http';
 import Redis from 'ioredis';
 import { Pool } from 'pg';
 import { applyRoutes } from './routes.js';
 import { startLeaderboardLoop } from './leaderboard.js';
 
 const app = Fastify({ logger: true });
-const httpServer = createServer(app as any);
-const io = new Server(httpServer, { cors: { origin: '*' } });
+await app.register(cors, { origin: true });  // ← 追加（Fastify v4）
 
 const PORT = Number(process.env.PORT || 8080);
 const redis = new Redis(process.env.REDIS_URL!);

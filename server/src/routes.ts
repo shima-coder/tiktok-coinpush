@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Server } from 'socket.io';
 import type Redis from 'ioredis';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { addScore, getTopN } from './leaderboard.js';
 import { simulate } from './physics.js';
 import { randomUUID } from 'crypto';
@@ -21,7 +21,7 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
 
   // ギフト受信スタブ（本番はTikTok連携から呼ぶ）
   app.post('/ingest/gift', async (req, reply) => {
-    const body: any = req.body || {};
+    const body: any = (req as any).body || {};
     const userId = String(body.userId || 'anon');
     const amountYen = Number(body.amountYen || 100);
 
@@ -33,10 +33,21 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
     );
 
     const seed = randomUUID();
-    const jpPool = redis ? Number((await redis.get('jp_pool')) || 0) : 0;
+    const jpPool = redis ? Number((await (redis as any).get('jp_pool')) || 0) : 0;
     const r = simulate(seed, medals, jpPool);
 
     if (redis) {
-      await redis.incrby(
+      await (redis as any).incrby(
         'jp_pool',
-        Math
+        Math.floor(amountYen * Number(process.env.JP_POOL_PCT || 0.02))
+      );
+      await addScore(redis as any, userId, r.score);
+    } else {
+      app.log.warn('REDIS_URL 未設定のためスコアは保存されません');
+    }
+
+    io.of('/overlay').emit('play:event', { userId, ...r });
+
+    return { ok: true, coins, medals, result: r };
+  });
+}

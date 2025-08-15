@@ -144,7 +144,7 @@
     <div class="bottom">
       <div class="hint">
         <div><b>テスト送信</b></div>
-        <code>curl -X POST https://&lt;render-app&gt;.onrender.com/ingest/gift -H "Content-Type: application/json" -d '{"userId":"test","amountYen":300}'</code><br/>
+        <code>curl -X POST https://&lt;your-app&gt;.onrender.com/ingest/gift -H "Content-Type: application/json" -d '{"userId":"test","amountYen":300}'</code><br/>
         接続先はこのページをホストしている同一オリジンを想定。別オリジンの場合は CORS と Socket.IO の <code>withCredentials</code> 等の設定を調整してください。
       </div>
     </div>
@@ -172,7 +172,6 @@
     // ====== jackpot meter ======
     let jpValue = 0;      // 0..1
     function addJackpot(deltaScore){
-      // 表示用の簡易メーター: スコアの伸びを0..1にクリップ
       jpValue = clamp(jpValue + deltaScore/5000, 0, 1);
       jpFill.style.width = (jpValue*100).toFixed(1) + '%';
     }
@@ -188,8 +187,6 @@
       if (dt < 2.5) comboMul = clamp(comboMul + 0.25, 1, 5);
       else comboMul = 1.0;
       comboEl.querySelector('.x').textContent = 'x' + comboMul.toFixed(1);
-      comboEl.style.transform = 'scale(1.0)';
-      // 小バウンド
       comboEl.animate([{transform:'scale(1.0)'},{transform:'scale(1.15)'},{transform:'scale(1.0)'}], {duration:260, easing:'ease-out'});
     }
 
@@ -203,7 +200,6 @@
         await sleep(sp);
       }
       reelCells.forEach((c,i)=> c.textContent = final);
-      // flash
       banner.textContent = final === '💎' ? 'MEGA HIT!' : 'HIT!';
       banner.style.display = 'block';
       banner.animate([{opacity:0, transform:'translateX(-50%) translateY(-6px)'},{opacity:1, transform:'translateX(-50%) translateY(0)'}], {duration:220, easing:'ease-out'});
@@ -234,7 +230,7 @@
       }
     }
     function coinRain(n=24){
-      const W = stage.clientWidth, H = stage.clientHeight;
+      const W = stage.clientWidth;
       for(let i=0;i<n;i++){
         setTimeout(()=>{
           spawnFloat(Math.random()*W, -20, Math.random() < .15 ? '💎':'🪙');
@@ -243,7 +239,6 @@
     }
     function loop(){
       const W = stage.clientWidth, H = stage.clientHeight;
-      // animate bursts
       document.querySelectorAll('.burst').forEach(b=>{
         const vx = parseFloat(b.dataset.vx), vy = parseFloat(b.dataset.vy);
         const x = parseFloat(b.style.left), y = parseFloat(b.style.top);
@@ -252,11 +247,10 @@
         b.style.opacity = Math.max(0, (parseFloat(b.style.opacity||'0.9') - 0.02)).toString();
       });
 
-      // animate floats (coins)
       for(let i=FLOATS.length-1;i>=0;i--){
         const f = FLOATS[i];
         f.t += 0.016;
-        f.vy += 0.05; // gravity
+        f.vy += 0.05;
         f.x += Math.sin(f.t*1.5)*1.6;
         f.y += f.vy*2.8;
         f.el.style.left = (f.x)+'px';
@@ -288,38 +282,68 @@
     socket.on('disconnect', ()=>{ connStatus.textContent='disconnected'; connStatus.style.color = 'var(--hot)'; });
     socket.on('connect_error', (e)=>{ connStatus.textContent='error'; connStatus.style.color = 'var(--hot)'; });
 
-    // hello ping
     socket.on('hello', (p)=> log(`hello: ${new Date(p.ts).toLocaleTimeString()}`));
 
-    // leaderboard push
     socket.on('leaderboard:update', (top10)=> renderLB(top10 || []));
 
-    // main event
+    // ==== スロット新ペイロード対応（fallback付き） ====
+    const TIER = {
+      MISS:   { stop:'⭐',  burst:10, rain:8,  banner:'TRY AGAIN', color:'var(--muted)' },
+      NORMAL: { stop:'🎁',  burst:16, rain:18, banner:'HIT!',      color:'var(--acc2)' },
+      HIGH:   { stop:'💎',  burst:22, rain:28, banner:'BIG HIT!',  color:'var(--acc)'  },
+      MEGA:   { stop:'💎',  burst:28, rain:44, banner:'MEGA HIT!', color:'var(--hot)'  },
+    };
+
     socket.on('play:event', async (payload)=>{
       try{
-        // payload = { userId, dropped, fallen, bonus, jpDelta, score }
+        // 新形式（spinあり）
+        if (payload && payload.spin) {
+          const { tier, symbols, multiplier, bonusGame, comboExtend } = payload.spin;
+          if (comboExtend) onComboHit(); else { comboMul = 1.0; comboEl.querySelector('.x').textContent = 'x1.0'; }
+
+          addJackpot((payload.jpDelta||0) + (payload.score||0));
+
+          // 回転→停止（tierの見た目を先に出し、最後に確定シンボル）
+          await spinSlot(TIER[tier]?.stop || '⭐');
+          if (Array.isArray(symbols) && symbols.length === 3) {
+            reelCells.forEach((c,i)=> c.textContent = symbols[i]);
+          }
+
+          const r = stage.getBoundingClientRect();
+          spawnBurst(r.left + r.width*0.5, r.top + r.height*0.45, TIER[tier]?.burst ?? 16);
+          coinRain(TIER[tier]?.rain ?? 16);
+          banner.textContent = TIER[tier]?.banner || 'HIT!';
+          banner.style.color = TIER[tier]?.color || '#fff';
+          banner.style.display = 'block';
+          setTimeout(()=> banner.style.display='none', 900);
+
+          log(`+${(payload.score||0)}  ${payload.userId||'anon'}  [${tier}] x${(multiplier||1).toFixed(2)}  jp:+${payload.jpDelta||0}`);
+
+          if (bonusGame) {
+            setTimeout(()=>{
+              coinRain(60);
+              spawnBurst(r.left + r.width*0.5, r.top + r.height*0.45, 36);
+            }, 400);
+          }
+          return;
+        }
+
+        // 旧形式（フォールバック）
         const { userId, fallen=0, bonus=0, jpDelta=0, score=0 } = payload || {};
         onComboHit();
         addJackpot((jpDelta||0) + (score||0));
-
-        // spin + burst
         await spinSlot(fallen >= 3 || bonus > 0 ? '💎' : '⭐');
         const r = stage.getBoundingClientRect();
         spawnBurst(r.left + r.width*0.5, r.top + r.height*0.45, 24);
-
-        // coin rain proportional to fallen
         coinRain(clamp(8 + Math.floor(fallen*1.2) + (bonus>0?12:0), 8, 60));
-
-        // side log
-        const line = `+${(score||0)}  ${userId || 'anon'}  (fallen:${fallen}, bonus:${bonus}, jp:+${jpDelta||0})`;
-        log(line);
+        log(`+${(score||0)}  ${userId || 'anon'}  (fallen:${fallen}, bonus:${bonus}, jp:+${jpDelta||0})`);
       }catch(e){
         console.error(e);
       }
     });
 
-    // initial fetch
-    fetch('/overlay/state').then(r=>r.json()).then(d=> renderLB(d.top10 || [])).catch(()=>{ /* ignore */ });
+    // 初期ロード：トップ10
+    fetch('/overlay/state').then(r=>r.json()).then(d=> renderLB(d.top10 || [])).catch(()=>{});
 
     function log(s){
       const lines = (logEl.textContent || '').split('\n').filter(Boolean).slice(-18);
@@ -331,7 +355,7 @@
       return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
     }
 
-    // optional: keep JP meter gently decay to create tension
+    // JPメーターの緩やかな減衰（緊張感）
     setInterval(()=> {
       jpValue = clamp(jpValue - 0.002, 0, 1);
       jpFill.style.width = (jpValue*100).toFixed(1) + '%';

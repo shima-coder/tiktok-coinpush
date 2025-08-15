@@ -5,6 +5,8 @@ import type { Pool } from 'pg';
 import { addScore, getTopN } from './leaderboard.js';
 import { simulate } from './physics.js';
 import { randomUUID } from 'crypto';
+import { readFile } from 'fs/promises';
+import path from 'path';
 
 type Ctx = { redis: Redis | null; db: Pool | null; io: Server };
 
@@ -49,5 +51,17 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
     io.of('/overlay').emit('play:event', { userId, ...r });
 
     return { ok: true, coins, medals, result: r };
+  });
+
+  // ← ここから追加：overlay.html を返すルート
+  app.get('/overlay.html', async (_req, reply) => {
+    try {
+      const p = path.resolve(process.cwd(), 'dist/overlay.html');
+      const html = await readFile(p, 'utf-8');
+      reply.type('text/html').send(html);
+    } catch (e) {
+      app.log.error(e);
+      reply.code(404).send({ error: 'overlay.html not found' });
+    }
   });
 }

@@ -2,150 +2,166 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>TikTok Live: COIN FEVER</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>TikTok Live: COIN FEVER (Portrait)</title>
   <style>
     :root {
       --bg: #05060a;
-      --panel: #0e1014;
+      --panel:#0e1014;
       --panel2:#10131a;
       --text:#eef1f6;
       --muted:#9aa0a6;
       --acc:#00e5a8;
       --acc2:#5b8cff;
-      --warn:#ffd166;
       --hot:#ff4d67;
       --good:#38ef7d;
+      --safePad: env(safe-area-inset-top, 8px);
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto}
-    .wrap{
-      display:grid;
-      grid-template-columns: 1fr 320px;
-      grid-template-rows: auto 1fr auto;
-      grid-template-areas:
-        "top top"
-        "stage side"
-        "bottom side";
-      height:100%;
-      gap:8px;
-      padding:8px;
-    }
-    .top { grid-area: top; }
-    .stage{ grid-area: stage; position:relative; overflow:hidden; min-height: 60vh; background: radial-gradient(1000px 480px at 60% 30%, #0a0f1a, #05060a); border:1px solid #141825; border-radius:16px; }
-    .side{ grid-area: side; background:linear-gradient(180deg,#0b0d12,#07080c); border:1px solid #141825; border-radius:16px; padding:12px; overflow:auto; }
-    .bottom { grid-area: bottom; display:flex; gap:8px; }
 
-    /* top bar */
+    /* ===== Portrait frame =====
+       端末の解像度に依存せず “縦長(9:16)の見た目” を維持しつつスケーリングします。
+    */
+    .frame {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: max(8px, var(--safePad));
+    }
+    .phone {
+      /* 9:16 アスペクト比を維持しつつ、画面内に最大化 */
+      width: min(100vw, 56.25vh);     /* 56.25vh = 9/16 * 100 */
+      height: min(177.78vw, 100vh);   /* 177.78vw = 16/9 * 100 */
+      max-height: 100%;
+      max-width: 100%;
+      aspect-ratio: 9/16;
+      border: 1px solid #141825;
+      border-radius: 20px;
+      background: linear-gradient(180deg, #070a10, #05060a);
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto 1fr auto auto; /* top / stage / leaderboard / log */
+      gap: 10px;
+      padding: 10px;
+    }
+
+    /* ===== TOP BAR ===== */
     .bar{
-      display:flex; align-items:center; gap:12px; padding:10px 12px;
+      display:flex; align-items:center; gap:10px; padding:10px 12px;
       background: linear-gradient(180deg, #0b0f18, #0a0d14);
-      border:1px solid #141825; border-radius:16px;
+      border:1px solid #141825; border-radius:14px;
     }
-    .title{ font-weight:700; letter-spacing:.5px }
-    .pill{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background:#0f1420; border:1px solid #192034; color:#cbd5e1; font-size:12px }
-    .meter{ position:relative; width:100%; height:14px; background:#0a0e16; border:1px solid #1a2132; border-radius:999px; overflow:hidden }
+    .title{ font-weight:700; letter-spacing:.5px; font-size:14px }
+    .pill{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:#0f1420; border:1px solid #192034; color:#cbd5e1; font-size:11px; white-space:nowrap }
+    .meter{ position:relative; flex:1; height:12px; background:#0a0e16; border:1px solid #1a2132; border-radius:999px; overflow:hidden }
     .meter > .fill{ position:absolute; inset:0; width:0%; background:linear-gradient(90deg, #0048ff, var(--acc)); transition: width .3s ease }
-    .meter-label{ font-size:12px; color:#aab3c2 }
+    .meter-label{ font-size:11px; color:#aab3c2 }
 
-    /* stage: slot & effects */
+    .topgrid{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:8px;
+      align-items:center;
+    }
+
+    /* ===== STAGE (slot & effects) ===== */
+    .stage{
+      position:relative; overflow:hidden; border:1px solid #141825; border-radius:16px;
+      background: radial-gradient(800px 800px at 50% 10%, #0b1320, #05060a);
+      min-height: 54vh; /* 縦の大半をスロットに */
+      display:flex; align-items:center; justify-content:center;
+    }
     .slot{
-      position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-      width:min(80vw, 560px); height:160px; background:linear-gradient(180deg,#0e1522,#0a0e18);
-      border:1px solid #1a2336; border-radius:18px; display:grid; grid-template-columns: repeat(3, 1fr);
-      gap:8px; padding:12px; box-shadow: 0 10px 40px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.04);
+      width: 86%;
+      max-width: 560px;
+      aspect-ratio: 3/1; /* 3セル×1段を大きく */
+      background: linear-gradient(180deg,#0e1522,#0a0e18);
+      border:1px solid #1a2336; border-radius:18px;
+      display:grid; grid-template-columns: repeat(3, 1fr);
+      gap:8px; padding:10px;
+      box-shadow: 0 10px 40px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.04);
     }
     .cell{
-      display:flex; align-items:center; justify-content:center; font-size:64px;
+      display:flex; align-items:center; justify-content:center;
+      font-size: min(12vw, 96px); /* 端末幅に応じて自動拡大 */
       background: radial-gradient(220px 120px at 50% 45%, #101a2a, #0a0f18);
       border:1px solid #1b2740; border-radius:14px; user-select:none;
     }
     .banner{
-      position:absolute; left:50%; top:10%; transform:translateX(-50%);
+      position:absolute; left:50%; top:6%; transform:translateX(-50%);
       padding:8px 14px; border-radius:12px; background:rgba(0,0,0,.35); border:1px solid #1b2333; font-weight:700;
-      box-shadow: 0 8px 30px rgba(0,0,0,.4);
+      box-shadow: 0 8px 30px rgba(0,0,0,.4); font-size:14px;
+      display:none;
     }
-
-    /* floating coins / fireworks */
-    .float{ position:absolute; pointer-events:none; font-size:28px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.45)); }
-    .burst{ position:absolute; pointer-events:none; width:10px; height:10px; border-radius:50%; background:var(--acc); box-shadow:0 0 16px var(--acc2); opacity:.9 }
-
-    /* combo */
     .combo{
-      position:absolute; right:14px; top:14px; background:rgba(0,0,0,.35); border:1px solid #1b2436; border-radius:12px;
-      padding:8px 12px; font-weight:700;
+      position:absolute; right:10px; top:10px; background:rgba(0,0,0,.35); border:1px solid #1b2436; border-radius:12px;
+      padding:6px 10px; font-weight:700; font-size:13px;
     }
     .combo .x { color:var(--hot) }
 
-    /* side: leaderboard */
-    .panel{ background: linear-gradient(180deg, #0b1018, #080c12); border:1px solid #171e2c; border-radius:14px; padding:10px; }
-    .panel + .panel{ margin-top:10px }
+    /* effects */
+    .float{ position:absolute; pointer-events:none; font-size:22px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.45)); }
+    .burst{ position:absolute; pointer-events:none; width:10px; height:10px; border-radius:50%; background:var(--acc); box-shadow:0 0 16px var(--acc2); opacity:.9 }
+
+    /* ===== LEADERBOARD ===== */
+    .panel{
+      background: linear-gradient(180deg, #0b1018, #080c12);
+      border:1px solid #171e2c; border-radius:14px; padding:10px;
+    }
+    .panel h3{ margin:0 0 6px 0; font-size:14px }
     .lb-item{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 8px; border-radius:10px; }
     .lb-item:nth-child(odd){ background: rgba(255,255,255,.02) }
-    .rank{ width:24px; text-align:center; color:#a5b4c3 }
-    .uid{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-    .score{ font-weight:700; color:#e8eef7 }
+    .rank{ width:22px; text-align:center; color:#a5b4c3; font-size:12px }
+    .uid{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px }
+    .score{ font-weight:700; color:#e8eef7; font-size:12px }
 
-    /* bottom info */
-    .hint{ flex:1; padding:10px 12px; background:#0b0f18; border:1px solid #141825; border-radius:12px; font-size:12px; color:#9aa0a6 }
+    /* ===== LOG ===== */
+    .log{ font-size:11px; color:#aab3c2; white-space:pre-line; max-height:18vh; overflow:auto }
 
-    @media (max-width: 960px){
-      .wrap{
-        grid-template-columns: 1fr;
-        grid-template-areas:
-          "top"
-          "stage"
-          "side"
-          "bottom";
-      }
-      .slot{ width:min(92vw, 560px) }
+    @media (max-width: 420px){
+      .title{ font-size:13px }
+      .cell{ font-size: min(14vw, 84px) }
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <!-- TOP BAR -->
-    <div class="top bar">
-      <div class="title">🎰 COIN FEVER Overlay</div>
-      <div class="pill" id="conn-pill">Socket: <span id="conn-status">connecting...</span></div>
-      <div style="flex:1"></div>
-      <div style="min-width:180px">
-        <div class="meter" title="Jackpot Meter">
-          <div class="fill" id="jp-fill" style="width:0%"></div>
+  <div class="frame">
+    <div class="phone">
+      <!-- ===== TOP ===== -->
+      <div class="bar">
+        <div class="topgrid" style="width:100%">
+          <div class="title">🎰 COIN FEVER Overlay</div>
+          <div class="pill">Socket: <span id="conn-status">connecting...</span></div>
+          <div class="meter" title="Jackpot Meter" style="grid-column: 1 / -1;">
+            <div class="fill" id="jp-fill" style="width:0%"></div>
+          </div>
         </div>
-        <div class="meter-label">JACKPOT</div>
       </div>
-    </div>
 
-    <!-- STAGE -->
-    <div class="stage" id="stage">
-      <div class="slot" id="slot">
-        <div class="cell" id="c0">💰</div>
-        <div class="cell" id="c1">💰</div>
-        <div class="cell" id="c2">💰</div>
+      <!-- ===== STAGE ===== -->
+      <div class="stage" id="stage">
+        <div class="slot" id="slot">
+          <div class="cell" id="c0">💰</div>
+          <div class="cell" id="c1">💰</div>
+          <div class="cell" id="c2">💰</div>
+        </div>
+        <div class="banner" id="banner"></div>
+        <div class="combo" id="combo">COMBO <span class="x">x1.0</span></div>
       </div>
-      <div class="banner" id="banner" style="display:none"></div>
-      <div class="combo" id="combo">COMBO <span class="x">x1.0</span></div>
-    </div>
 
-    <!-- SIDE -->
-    <aside class="side">
+      <!-- ===== LEADERBOARD ===== -->
       <div class="panel">
-        <div style="font-weight:700; margin-bottom:6px">🏆 ランキング Top10（今日）</div>
+        <h3>🏆 ランキング Top10（今日）</h3>
         <div id="lb"></div>
       </div>
-      <div class="panel">
-        <div style="font-weight:700; margin-bottom:6px">🎯 最近のヒット</div>
-        <div id="log" style="font-size:12px; color:#aab3c2; white-space:pre-line"></div>
-      </div>
-    </aside>
 
-    <!-- BOTTOM -->
-    <div class="bottom">
-      <div class="hint">
-        <div><b>テスト送信</b></div>
-        <code>curl -X POST https://&lt;your-app&gt;.onrender.com/ingest/gift -H "Content-Type: application/json" -d '{"userId":"test","amountYen":300}'</code><br/>
-        接続先はこのページをホストしている同一オリジンを想定。別オリジンの場合は CORS と Socket.IO の <code>withCredentials</code> 等の設定を調整してください。
+      <!-- ===== LOG ===== -->
+      <div class="panel">
+        <h3>🎯 最近のヒット</h3>
+        <div id="log" class="log"></div>
       </div>
     </div>
   </div>
@@ -153,7 +169,7 @@
   <!-- Socket.IO CDN -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
   <script>
-    // ====== helpers ======
+    // ===== helpers =====
     const $ = (sel) => document.querySelector(sel);
     const EMOJIS = ['💰','🪙','💎','⭐','🍀','🔥','🎁','🎉'];
     const stage = $('#stage');
@@ -169,44 +185,42 @@
     function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
     function now(){ return performance.now(); }
 
-    // ====== jackpot meter ======
-    let jpValue = 0;      // 0..1
+    // ===== jackpot meter =====
+    let jpValue = 0; // 0..1
     function addJackpot(deltaScore){
       jpValue = clamp(jpValue + deltaScore/5000, 0, 1);
       jpFill.style.width = (jpValue*100).toFixed(1) + '%';
     }
 
-    // ====== combo ======
+    // ===== combo =====
     let lastHitAt = 0;
     let comboMul = 1.0;
     function onComboHit(){
       const t = now();
       const dt = (t - lastHitAt) / 1000;
       lastHitAt = t;
-      // 2.5秒以内の連打で倍率UP、最大5.0
       if (dt < 2.5) comboMul = clamp(comboMul + 0.25, 1, 5);
       else comboMul = 1.0;
       comboEl.querySelector('.x').textContent = 'x' + comboMul.toFixed(1);
       comboEl.animate([{transform:'scale(1.0)'},{transform:'scale(1.15)'},{transform:'scale(1.0)'}], {duration:260, easing:'ease-out'});
     }
 
-    // ====== slot animation ======
+    // ===== slot animation =====
     async function spinSlot(final='💎'){
       const t0 = now();
-      const dur = 900;
-      const sp = 60;
+      const dur = 900, sp = 60;
       while (now() - t0 < dur){
         reelCells.forEach(c => c.textContent = EMOJIS[(Math.random()*EMOJIS.length)|0]);
         await sleep(sp);
       }
-      reelCells.forEach((c,i)=> c.textContent = final);
+      reelCells.forEach((c)=> c.textContent = final);
       banner.textContent = final === '💎' ? 'MEGA HIT!' : 'HIT!';
       banner.style.display = 'block';
-      banner.animate([{opacity:0, transform:'translateX(-50%) translateY(-6px)'},{opacity:1, transform:'translateX(-50%) translateY(0)'}], {duration:220, easing:'ease-out'});
+      banner.animate([{opacity:0, transform:'translateY(-6px)'},{opacity:1, transform:'translateY(0)'}], {duration:220, easing:'ease-out'});
       setTimeout(()=> banner.style.display='none', 900);
     }
 
-    // ====== particles / coins ======
+    // ===== particles / coins =====
     const FLOATS = []; // {el,x,y,t,vy}
     function spawnFloat(x, y, char='🪙'){
       const el = document.createElement('div');
@@ -250,9 +264,9 @@
       for(let i=FLOATS.length-1;i>=0;i--){
         const f = FLOATS[i];
         f.t += 0.016;
-        f.vy += 0.05;
-        f.x += Math.sin(f.t*1.5)*1.6;
-        f.y += f.vy*2.8;
+        f.vy += 0.05;      // gravity
+        f.x += Math.sin(f.t*1.5)*1.2; // 横振れは縦画面向けに控えめ
+        f.y += f.vy*2.6;
         f.el.style.left = (f.x)+'px';
         f.el.style.top  = (f.y)+'px';
         if(f.y > H+60){ f.el.remove(); FLOATS.splice(i,1); }
@@ -261,7 +275,7 @@
     }
     requestAnimationFrame(loop);
 
-    // ====== leaderboard ======
+    // ===== leaderboard =====
     function renderLB(list){
       lbEl.innerHTML = '';
       list.forEach((it, idx) => {
@@ -276,17 +290,16 @@
       });
     }
 
-    // ====== socket & data ======
+    // ===== socket & data =====
     const socket = io('/overlay', { transports:['websocket'], timeout: 8000, reconnection: true, reconnectionDelay: 800, reconnectionDelayMax: 4000 });
     socket.on('connect', ()=>{ connStatus.textContent='connected'; connStatus.style.color = 'var(--good)'; });
     socket.on('disconnect', ()=>{ connStatus.textContent='disconnected'; connStatus.style.color = 'var(--hot)'; });
-    socket.on('connect_error', (e)=>{ connStatus.textContent='error'; connStatus.style.color = 'var(--hot)'; });
+    socket.on('connect_error', ()=>{ connStatus.textContent='error'; connStatus.style.color = 'var(--hot)'; });
 
     socket.on('hello', (p)=> log(`hello: ${new Date(p.ts).toLocaleTimeString()}`));
-
     socket.on('leaderboard:update', (top10)=> renderLB(top10 || []));
 
-    // ==== スロット新ペイロード対応（fallback付き） ====
+    // 新ペイロード( spin )にも対応
     const TIER = {
       MISS:   { stop:'⭐',  burst:10, rain:8,  banner:'TRY AGAIN', color:'var(--muted)' },
       NORMAL: { stop:'🎁',  burst:16, rain:18, banner:'HIT!',      color:'var(--acc2)' },
@@ -296,21 +309,18 @@
 
     socket.on('play:event', async (payload)=>{
       try{
-        // 新形式（spinあり）
         if (payload && payload.spin) {
           const { tier, symbols, multiplier, bonusGame, comboExtend } = payload.spin;
           if (comboExtend) onComboHit(); else { comboMul = 1.0; comboEl.querySelector('.x').textContent = 'x1.0'; }
-
           addJackpot((payload.jpDelta||0) + (payload.score||0));
 
-          // 回転→停止（tierの見た目を先に出し、最後に確定シンボル）
           await spinSlot(TIER[tier]?.stop || '⭐');
           if (Array.isArray(symbols) && symbols.length === 3) {
             reelCells.forEach((c,i)=> c.textContent = symbols[i]);
           }
 
           const r = stage.getBoundingClientRect();
-          spawnBurst(r.left + r.width*0.5, r.top + r.height*0.45, TIER[tier]?.burst ?? 16);
+          spawnBurst(r.left + r.width*0.5, r.top + r.height*0.42, TIER[tier]?.burst ?? 16);
           coinRain(TIER[tier]?.rain ?? 16);
           banner.textContent = TIER[tier]?.banner || 'HIT!';
           banner.style.color = TIER[tier]?.color || '#fff';
@@ -322,19 +332,19 @@
           if (bonusGame) {
             setTimeout(()=>{
               coinRain(60);
-              spawnBurst(r.left + r.width*0.5, r.top + r.height*0.45, 36);
+              spawnBurst(r.left + r.width*0.5, r.top + r.height*0.42, 36);
             }, 400);
           }
           return;
         }
 
-        // 旧形式（フォールバック）
+        // 旧形式フォールバック
         const { userId, fallen=0, bonus=0, jpDelta=0, score=0 } = payload || {};
         onComboHit();
         addJackpot((jpDelta||0) + (score||0));
         await spinSlot(fallen >= 3 || bonus > 0 ? '💎' : '⭐');
         const r = stage.getBoundingClientRect();
-        spawnBurst(r.left + r.width*0.5, r.top + r.height*0.45, 24);
+        spawnBurst(r.left + r.width*0.5, r.top + r.height*0.42, 24);
         coinRain(clamp(8 + Math.floor(fallen*1.2) + (bonus>0?12:0), 8, 60));
         log(`+${(score||0)}  ${userId || 'anon'}  (fallen:${fallen}, bonus:${bonus}, jp:+${jpDelta||0})`);
       }catch(e){
@@ -342,7 +352,7 @@
       }
     });
 
-    // 初期ロード：トップ10
+    // 初期ロード
     fetch('/overlay/state').then(r=>r.json()).then(d=> renderLB(d.top10 || [])).catch(()=>{});
 
     function log(s){
@@ -350,12 +360,11 @@
       lines.push(s);
       logEl.textContent = lines.join('\n');
     }
-
     function escapeHtml(s){
       return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
     }
 
-    // JPメーターの緩やかな減衰（緊張感）
+    // JPメーター緩やか減衰
     setInterval(()=> {
       jpValue = clamp(jpValue - 0.002, 0, 1);
       jpFill.style.width = (jpValue*100).toFixed(1) + '%';

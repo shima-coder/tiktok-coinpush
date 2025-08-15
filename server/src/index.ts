@@ -1,30 +1,47 @@
 import Fastify from 'fastify';
-import cors from '@fastify/cors';       // ← 追加
-import { Server } from 'socket.io';
+import cors from '@fastify/cors';
+import { Server as IOServer } from 'socket.io';
 import Redis from 'ioredis';
 import { Pool } from 'pg';
 import { applyRoutes } from './routes.js';
 import { startLeaderboardLoop } from './leaderboard.js';
 
-const app = Fastify({ logger: true });
-await app.register(cors, { origin: true });  // ← 追加（Fastify v4）
+async function main() {
+  const app = Fastify({ logger: true });
 
-const PORT = Number(process.env.PORT || 8080);
-const redis = new Redis(process.env.REDIS_URL!);
-const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  // CORS（Fastify v4）
+  await app.register(cors, { origin: true });
 
-// WebSocket: overlay channel
-io.of('/overlay').on('connection', (socket) => {
-  socket.emit('hello', { ts: Date.now() });
-});
+  const PORT = Number(process.env.PORT || 8080);
 
-// REST routes
-applyRoutes(app, { redis, db, io });
+  // ENVが未設定でも落ちないように「任意」にする
+  const redisUrl = process.env.REDIS_URL;
+  const dbUrl = process.env.DATABASE_URL;
+  const redis = redisUrl ? new Redis(redisUrl) : null;
+  const db = dbUrl ? new Pool({ connectionString: dbUrl }) : null;
 
-// ranking loop
-startLeaderboardLoop(redis, io)
-  .catch(err => app.log.error(err));
+  // Socket.IO は Fastify の server にぶら下げる
+  const io = new IOServer(app.server, { cors: { origin: true } });
 
-httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`listening on ${PORT}`);
+  io.of('/overlay').on('connection', (socket) => {
+    socket.emit('hello', { ts: Date.now() });
+  });
+
+  // REST/WS ルート
+  applyRoutes(app, { redis, db, io });
+
+  // リーダーボード更新（Redisがなければスキップ）
+  if (redis) {
+    startLeaderboardLoop(redis as any, io).catch((err) => app.log.error(err));
+  } else {
+    app.log.warn('REDIS_URL 未設定のため leaderboard ループは無効です');
+  }
+
+  await app.listen({ port: PORT, host: '0.0.0.0' });
+  app.log.info(`listening on ${PORT}`);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
 });

@@ -1,37 +1,209 @@
 <!doctype html>
-<html>
+<html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Overlay</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>TikTok Coin Pusher</title>
   <style>
-    body{ margin:0; font-family: system-ui, sans-serif; background:#000; color:#fff; }
-    .wrap{ display:grid; grid-template-columns: 1fr 300px; height:100vh; }
-    .field{ display:flex; align-items:center; justify-content:center; font-size:32px; }
-    .side{ padding:16px; background:rgba(255,255,255,0.06); }
-    .rank li{ display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.08); }
+    :root { --bg:#0e0e0f; --panel:#111; --text:#fff; --muted:#9aa0a6; --acc:#00E5A8; }
+    *{box-sizing:border-box} html,body{height:100%;margin:0;background:#000;color:var(--text);font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial}
+    .wrap{display:grid;grid-template-columns:1fr 310px;height:100%;}
+    .stage{position:relative;background:#000;display:flex;align-items:center;justify-content:center;}
+    canvas{width:100%;height:100%;max-height:100vh;aspect-ratio:16/9;background:radial-gradient(#000,#000 50%,#0b0b0c 80%);}
+    .side{background:#0f0f10;border-left:1px solid #1b1c1f; padding:14px 12px; overflow:auto}
+    h2{margin:4px 0 10px;font-size:18px}
+    .row{display:flex;align-items:center;gap:10px;padding:8px 6px;border-radius:10px;margin:4px 0;background:#121214}
+    .rank{width:22px;text-align:right;color:#9aa0a6}
+    .name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .score{font-variant-numeric:tabular-nums}
+    .toast{position:absolute; left:50%; top:16%; transform:translateX(-50%); padding:10px 16px; background:#111; border:1px solid #222; border-radius:12px; color:#fff; box-shadow:0 10px 30px #0008; font-size:18px; opacity:0; transition:opacity .2s, transform .2s}
+    .toast.show{opacity:1; transform:translateX(-50%) scale(1.02)}
+    .badge{color:#000;background:var(--acc);padding:2px 8px;border-radius:999px;margin-left:8px;font-weight:700}
+    .log{position:absolute; bottom:10px; left:10px; color:#9aa0a6; font-size:12px}
   </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="field">COIN PUSHER / JP演出は配信で</div>
-  <div class="side">
-    <h3>Top 10 Today</h3>
-    <ol class="rank" id="rank"></ol>
-    <div id="log" style="margin-top:12px;font-size:12px;opacity:.8"></div>
+  <div class="stage">
+    <canvas id="cv" width="1280" height="720"></canvas>
+    <div id="toast" class="toast">+0<span class="badge">COMBO</span></div>
+    <div class="log" id="log"></div>
   </div>
+  <aside class="side">
+    <h2>Top 10 Today</h2>
+    <div id="lb"></div>
+  </aside>
 </div>
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+<!-- socket.io v4 -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-7KFSnm1D1q1m7L3g8Y8iB7qk0mJb4k8wS8o1VjFq8hVh4bJYg7r9m9JcC2y6h2Yb" crossorigin="anonymous"></script>
+
 <script>
-  const r = document.getElementById('rank');
-  const log = document.getElementById('log');
-  function render(top){
-    r.innerHTML = (top||[]).map((e,i)=>`<li><span>#${i+1} ${e.userId}</span><b>${e.score}</b></li>`).join('');
+(function(){
+  const W = 1280, H = 720;
+  const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  const lb = document.getElementById('lb');
+  const toast = document.getElementById('toast');
+  const logEl = document.getElementById('log');
+
+  // ---- 物理もどき（軽量）：パチンコ風ピン&ボード ----
+  const pins = [];
+  function makePins(){
+    pins.length = 0;
+    const cols = 13, rows = 10, gapX = W*0.06, gapY = 52;
+    const offX = (W*0.75 - (cols-1)*gapX)/2 + 40, offY = 120;
+    for(let r=0;r<rows;r++){
+      for(let c=0;c<cols;c++){
+        const x = offX + c*gapX + (r%2? gapX/2:0);
+        const y = offY + r*gapY;
+        pins.push({x,y});
+      }
+    }
   }
-  fetch('/overlay/state').then(r=>r.json()).then(s=>render(s.top10||[]));
-  const s = io('/overlay');
-  s.on('leaderboard:update', render);
-  s.on('play:event', (ev)=>{ log.innerHTML = `[${new Date().toLocaleTimeString()}] ${ev.userId} +${ev.score}<br>` + log.innerHTML; });
+  makePins();
+
+  const holes = [
+    {x: W*0.72, y:H-70, r:26, bonus:100},
+    {x: W*0.60, y:H-70, r:26, bonus:50},
+    {x: W*0.84, y:H-70, r:26, bonus:50}
+  ];
+
+  const coins = [];
+  function dropBundle(n, name){
+    for(let i=0;i<n;i++){
+      coins.push({
+        x: W*0.75 + (Math.random()-0.5)*80,
+        y: 40 - i*8,
+        vx: (Math.random()-0.5)*2,
+        vy: 0,
+        r: 9,
+        col: '#e0e0e0',
+        name
+      });
+    }
+  }
+
+  let lastTs = 0, scoreFx = 0;
+  function step(ts){
+    const dt = Math.min(0.033, (ts-lastTs)/1000 || 0.016);
+    lastTs = ts;
+
+    // 背景
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = '#000'; ctx.fillRect(0,0,W,H);
+
+    // サイドウォール
+    ctx.fillStyle = '#0b0b0c';
+    ctx.fillRect(W*0.5, 0, W*0.5, H);
+    ctx.fillStyle = '#151617';
+    ctx.fillRect(W*0.5, 0, 4, H);
+
+    // ピン
+    ctx.fillStyle = '#2a2b2e';
+    for(const p of pins){
+      ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI*2); ctx.fill();
+    }
+
+    // ホール
+    for(const h of holes){
+      ctx.beginPath(); ctx.arc(h.x,h.y,h.r,0,Math.PI*2);
+      ctx.fillStyle = '#0f0f10'; ctx.fill();
+      ctx.strokeStyle = '#1f2023'; ctx.lineWidth = 3; ctx.stroke();
+      ctx.fillStyle = '#00E5A8'; ctx.font = 'bold 16px system-ui';
+      ctx.fillText(`+${h.bonus}`, h.x-20, h.y+5);
+    }
+
+    // コイン更新
+    for(const c of coins){
+      c.vy += 28*dt; // gravity
+      c.x += c.vx*60*dt;
+      c.y += c.vy*60*dt;
+
+      // 壁反射
+      const minX = W*0.55, maxX = W*0.95;
+      if(c.x < minX){ c.x=minX; c.vx*=-0.6; }
+      if(c.x > maxX){ c.x=maxX; c.vx*=-0.6; }
+
+      // ピン衝突（簡易）
+      for(const p of pins){
+        const dx=c.x-p.x, dy=c.y-p.y, d2=dx*dx+dy*dy, rr=(c.r+6)**2;
+        if(d2<rr){
+          const d=Math.sqrt(d2)||1;
+          const nx=dx/d, ny=dy/d;
+          // 反発
+          const vdot = c.vx*nx + c.vy*ny;
+          c.vx -= 1.8*vdot*nx;
+          c.vy -= 1.8*vdot*ny;
+          // めり込み解消
+          const overlap=(c.r+6)-d;
+          c.x += nx*overlap*0.6;
+          c.y += ny*overlap*0.6;
+        }
+      }
+
+      // 描画
+      ctx.beginPath();
+      ctx.arc(c.x,c.y,c.r,0,Math.PI*2);
+      ctx.fillStyle=c.col; ctx.fill();
+      ctx.strokeStyle='#8a8a8a'; ctx.lineWidth=1; ctx.stroke();
+    }
+
+    // ホール得点＆コイン消去
+    for(let i=coins.length-1;i>=0;i--){
+      const c = coins[i];
+      for(const h of holes){
+        const dx=c.x-h.x, dy=c.y-h.y;
+        if(dx*dx+dy*dy < (h.r-4)*(h.r-4)){
+          coins.splice(i,1);
+          showToast(`+${h.bonus}`, `${c.name}`);
+          scoreFx += h.bonus;
+          break;
+        }
+      }
+      if(c && c.y>H+30) coins.splice(i,1);
+    }
+
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+
+  function showToast(text, name){
+    toast.innerHTML = `${text} <span class="badge">${name}</span>`;
+    toast.classList.add('show');
+    setTimeout(()=>toast.classList.remove('show'), 1200);
+  }
+
+  // ---- Leaderboard ----
+  async function refreshLB(){
+    try{
+      const res = await fetch('/overlay/state');
+      const data = await res.json();
+      lb.innerHTML = (data.top10||[]).map((e,i)=>(
+        `<div class="row"><div class="rank">${i+1}</div>`+
+        `<div class="name">${escapeHtml(e.name||e.user||e[0]||'-')}</div>`+
+        `<div class="score">${formatScore(e.score||e[1]||0)}</div></div>`
+      )).join('') || `<div class="row"><div class="name">まだスコアがありません</div></div>`;
+    }catch(e){ console.error(e); }
+  }
+  function formatScore(n){ return Math.round(n).toLocaleString('ja-JP'); }
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
+  setInterval(refreshLB, 3000);
+  refreshLB();
+
+  // ---- Socket.IO: play:event を受けたらコイン落下 ----
+  const ioNs = window.location.origin.replace(/^http/, 'ws'); // RenderでもOK
+  const socket = io(`${ioNs}/overlay`, { transports:['websocket'] });
+  socket.on('connect', ()=> log('ws connected'));
+  socket.on('play:event', (evt)=>{
+    const medals = Math.max(5, Math.floor((evt && evt.medals) || 12));
+    dropBundle(Math.min(80, medals), evt.userId || 'user');
+    log(`play:event by ${evt.userId||'user'} x${medals}`);
+    refreshLB(); // 念のため
+  });
+  socket.on('hello', ()=> log('hello from server'));
+
+  function log(s){ logEl.textContent = s; }
+})();
 </script>
 </body>
 </html>

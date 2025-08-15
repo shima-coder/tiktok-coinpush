@@ -3,206 +3,240 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>TikTok Coin Pusher</title>
+  <title>TikTok Live: Coin Fever</title>
   <style>
-    :root { --bg:#0e0e0f; --panel:#111; --text:#fff; --muted:#9aa0a6; --acc:#00E5A8; }
-    *{box-sizing:border-box} html,body{height:100%;margin:0;background:#000;color:var(--text);font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial}
-    .wrap{display:grid;grid-template-columns:1fr 310px;height:100%;}
-    .stage{position:relative;background:#000;display:flex;align-items:center;justify-content:center;}
-    canvas{width:100%;height:100%;max-height:100vh;aspect-ratio:16/9;background:radial-gradient(#000,#000 50%,#0b0b0c 80%);}
-    .side{background:#0f0f10;border-left:1px solid #1b1c1f; padding:14px 12px; overflow:auto}
+    :root {
+      --bg: #05060a; --panel: #0e1014; --panel2:#10131a;
+      --text:#eef1f6; --muted:#9aa0a6; --acc:#00e5a8; --acc2:#5b8cff; --warn:#ffd166; --hot:#ff4d67;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto}
+    .wrap{display:grid;grid-template-columns:1fr 320px;height:100%;}
+    .stage{position:relative;overflow:hidden;background:radial-gradient(1200px 600px at 70% 30%, #0a0f1a, #05060a)}
+    .side{background:linear-gradient(180deg,#0b0d12,#07080c);border-left:1px solid #171a22;padding:14px 12px;overflow:auto}
     h2{margin:4px 0 10px;font-size:18px}
-    .row{display:flex;align-items:center;gap:10px;padding:8px 6px;border-radius:10px;margin:4px 0;background:#121214}
-    .rank{width:22px;text-align:right;color:#9aa0a6}
+    .lb-row{display:flex;align-items:center;gap:10px;padding:8px 6px;border-radius:10px;margin:6px 0;background:rgba(255,255,255,0.03);backdrop-filter: blur(4px)}
+    .rank{width:22px;text-align:right;color:var(--muted)}
     .name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .score{font-variant-numeric:tabular-nums}
-    .toast{position:absolute; left:50%; top:16%; transform:translateX(-50%); padding:10px 16px; background:#111; border:1px solid #222; border-radius:12px; color:#fff; box-shadow:0 10px 30px #0008; font-size:18px; opacity:0; transition:opacity .2s, transform .2s}
+    .meter-wrap{position:absolute;left:50%;top:10px;transform:translateX(-50%);width:min(820px,80%);background:#0c0f16;border:1px solid #161a24;border-radius:14px;box-shadow:0 10px 30px #0007}
+    .meter-bar{height:16px;background:linear-gradient(90deg,var(--acc),var(--acc2));width:0%;border-radius:14px}
+    .meter{padding:8px 12px}
+    .meter-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:14px;color:#c7cfdb}
+    .slot{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%); width:min(640px,70%); aspect-ratio:16/9; border-radius:18px; background:linear-gradient(180deg,#0b0f17,#0a0c12); border:1px solid #151a24; box-shadow:0 30px 80px #0008; overflow:hidden}
+    .slot-head{padding:10px 16px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(180deg,#111726,#0e1320); border-bottom:1px solid #171d2b}
+    .slot-title{font-weight:800;letter-spacing:.5px}
+    .slot-reel{display:grid;grid-template-columns:1fr 1fr 1fr; gap:8px; padding:18px}
+    .cell{height:120px;border-radius:16px;background:linear-gradient(145deg,#121826,#0a0f1a); border:1px solid #1a2233; display:flex; align-items:center;justify-content:center; font-size:44px}
+    .slot-foot{display:flex;gap:10px;align-items:center;padding:10px 16px;border-top:1px solid #151a24;font-size:14px;color:#c7cfdb}
+    .pill{border:1px solid #1b2230; background:#0c111a; border-radius:999px; padding:4px 10px}
+    .combo{color:#000;background:var(--warn);font-weight:800}
+    .toast{position:absolute; left:50%; top:18%; transform:translateX(-50%); padding:12px 18px; background:#0e121a; border:1px solid #1b2230; border-radius:12px; color:#fff; box-shadow:0 10px 30px #0008; font-size:18px; opacity:0; transition:opacity .2s, transform .2s; pointer-events:none}
     .toast.show{opacity:1; transform:translateX(-50%) scale(1.02)}
-    .badge{color:#000;background:var(--acc);padding:2px 8px;border-radius:999px;margin-left:8px;font-weight:700}
-    .log{position:absolute; bottom:10px; left:10px; color:#9aa0a6; font-size:12px}
+    canvas.particles{position:absolute; inset:0; pointer-events:none;}
+    .floating{position:absolute; color:#fff; font-weight:800; text-shadow:0 6px 24px #000; pointer-events:none}
+    .streak{color:#000;background:var(--hot);padding:2px 8px;border-radius:999px;margin-left:8px;font-weight:800}
+    .dim{color:#a8b0be}
   </style>
 </head>
 <body>
 <div class="wrap">
   <div class="stage">
-    <canvas id="cv" width="1280" height="720"></canvas>
-    <div id="toast" class="toast">+0<span class="badge">COMBO</span></div>
-    <div class="log" id="log"></div>
+    <div class="meter-wrap">
+      <div class="meter">
+        <div class="meter-head"><div>JACKPOT POOL</div><div id="meterText" class="dim">0%</div></div>
+        <div class="meter-bar" id="meterBar"></div>
+      </div>
+    </div>
+
+    <div class="slot" id="slot">
+      <div class="slot-head">
+        <div class="slot-title">COIN FEVER</div>
+        <div class="pill" id="lastUser">—</div>
+      </div>
+      <div class="slot-reel" id="reel">
+        <div class="cell" id="c1">💰</div>
+        <div class="cell" id="c2">⭐️</div>
+        <div class="cell" id="c3">🍀</div>
+      </div>
+      <div class="slot-foot">
+        <div class="pill">+<span id="lastScore">0</span> pt</div>
+        <div class="pill combo">COMBO x<span id="combo">1</span></div>
+        <div class="pill">MEDALS <span id="medals">0</span></div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast">+0</div>
+    <canvas class="particles" id="fx" width="1920" height="1080"></canvas>
   </div>
+
   <aside class="side">
     <h2>Top 10 Today</h2>
     <div id="lb"></div>
   </aside>
 </div>
 
-<!-- socket.io v4 -->
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-7KFSnm1D1q1m7L3g8Y8iB7qk0mJb4k8wS8o1VjFq8hVh4bJYg7r9m9JcC2y6h2Yb" crossorigin="anonymous"></script>
-
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
 <script>
-(function(){
-  const W = 1280, H = 720;
-  const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+(() => {
+  // ====== UI refs ======
   const lb = document.getElementById('lb');
   const toast = document.getElementById('toast');
-  const logEl = document.getElementById('log');
+  const meterBar = document.getElementById('meterBar');
+  const meterText = document.getElementById('meterText');
+  const lastUser = document.getElementById('lastUser');
+  const lastScore = document.getElementById('lastScore');
+  const medalsEl = document.getElementById('medals');
+  const comboEl = document.getElementById('combo');
+  const reel = document.getElementById('reel');
+  const fx = document.getElementById('fx');
+  const g = fx.getContext('2d');
 
-  // ---- 物理もどき（軽量）：パチンコ風ピン&ボード ----
-  const pins = [];
-  function makePins(){
-    pins.length = 0;
-    const cols = 13, rows = 10, gapX = W*0.06, gapY = 52;
-    const offX = (W*0.75 - (cols-1)*gapX)/2 + 40, offY = 120;
-    for(let r=0;r<rows;r++){
-      for(let c=0;c<cols;c++){
-        const x = offX + c*gapX + (r%2? gapX/2:0);
-        const y = offY + r*gapY;
-        pins.push({x,y});
-      }
-    }
-  }
-  makePins();
+  // ====== state ======
+  let combo = 1, lastPlayAt = 0, jackpot = 0; // 0..1
+  const EMOJIS = ['💰','⭐️','🍀','💎','🔥','🎉','🪙','⚡️'];
+  const FLOATS = [];
 
-  const holes = [
-    {x: W*0.72, y:H-70, r:26, bonus:100},
-    {x: W*0.60, y:H-70, r:26, bonus:50},
-    {x: W*0.84, y:H-70, r:26, bonus:50}
-  ];
+  // ====== helpers ======
+  const fmt = (n) => Math.round(n).toLocaleString('ja-JP');
+  const esc = (s) => String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);
+  const setMeter = (pct) => {
+    jackpot = Math.max(0, Math.min(1, pct));
+    meterBar.style.width = (jackpot*100).toFixed(0)+'%';
+    meterText.textContent = (jackpot*100).toFixed(0)+'%';
+  };
 
-  const coins = [];
-  function dropBundle(n, name){
+  // ====== particles / coin rain ======
+  const P = [];
+  function spawnBurst(x,y,n,kind='coin'){
     for(let i=0;i<n;i++){
-      coins.push({
-        x: W*0.75 + (Math.random()-0.5)*80,
-        y: 40 - i*8,
-        vx: (Math.random()-0.5)*2,
-        vy: 0,
-        r: 9,
-        col: '#e0e0e0',
-        name
+      P.push({
+        x, y,
+        vx: (Math.random()-0.5)*8, vy: (Math.random()-0.8)*9,
+        r: kind==='coin'? 4+Math.random()*3 : 2+Math.random()*2,
+        life: 1, kind
       });
     }
   }
-
-  let lastTs = 0, scoreFx = 0;
-  function step(ts){
-    const dt = Math.min(0.033, (ts-lastTs)/1000 || 0.016);
-    lastTs = ts;
-
-    // 背景
-    ctx.clearRect(0,0,W,H);
-    ctx.fillStyle = '#000'; ctx.fillRect(0,0,W,H);
-
-    // サイドウォール
-    ctx.fillStyle = '#0b0b0c';
-    ctx.fillRect(W*0.5, 0, W*0.5, H);
-    ctx.fillStyle = '#151617';
-    ctx.fillRect(W*0.5, 0, 4, H);
-
-    // ピン
-    ctx.fillStyle = '#2a2b2e';
-    for(const p of pins){
-      ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI*2); ctx.fill();
+  function coinRain(n=60){
+    for(let i=0;i<n;i++){
+      P.push({ x: fx.width*(0.55+Math.random()*0.4), y: -10-Math.random()*200,
+        vx: (Math.random()-0.5)*2, vy: 2+Math.random()*3, r: 3+Math.random()*3, life: 1.2, kind:'coin' });
     }
-
-    // ホール
-    for(const h of holes){
-      ctx.beginPath(); ctx.arc(h.x,h.y,h.r,0,Math.PI*2);
-      ctx.fillStyle = '#0f0f10'; ctx.fill();
-      ctx.strokeStyle = '#1f2023'; ctx.lineWidth = 3; ctx.stroke();
-      ctx.fillStyle = '#00E5A8'; ctx.font = 'bold 16px system-ui';
-      ctx.fillText(`+${h.bonus}`, h.x-20, h.y+5);
-    }
-
-    // コイン更新
-    for(const c of coins){
-      c.vy += 28*dt; // gravity
-      c.x += c.vx*60*dt;
-      c.y += c.vy*60*dt;
-
-      // 壁反射
-      const minX = W*0.55, maxX = W*0.95;
-      if(c.x < minX){ c.x=minX; c.vx*=-0.6; }
-      if(c.x > maxX){ c.x=maxX; c.vx*=-0.6; }
-
-      // ピン衝突（簡易）
-      for(const p of pins){
-        const dx=c.x-p.x, dy=c.y-p.y, d2=dx*dx+dy*dy, rr=(c.r+6)**2;
-        if(d2<rr){
-          const d=Math.sqrt(d2)||1;
-          const nx=dx/d, ny=dy/d;
-          // 反発
-          const vdot = c.vx*nx + c.vy*ny;
-          c.vx -= 1.8*vdot*nx;
-          c.vy -= 1.8*vdot*ny;
-          // めり込み解消
-          const overlap=(c.r+6)-d;
-          c.x += nx*overlap*0.6;
-          c.y += ny*overlap*0.6;
-        }
-      }
-
-      // 描画
-      ctx.beginPath();
-      ctx.arc(c.x,c.y,c.r,0,Math.PI*2);
-      ctx.fillStyle=c.col; ctx.fill();
-      ctx.strokeStyle='#8a8a8a'; ctx.lineWidth=1; ctx.stroke();
-    }
-
-    // ホール得点＆コイン消去
-    for(let i=coins.length-1;i>=0;i--){
-      const c = coins[i];
-      for(const h of holes){
-        const dx=c.x-h.x, dy=c.y-h.y;
-        if(dx*dx+dy*dy < (h.r-4)*(h.r-4)){
-          coins.splice(i,1);
-          showToast(`+${h.bonus}`, `${c.name}`);
-          scoreFx += h.bonus;
-          break;
-        }
-      }
-      if(c && c.y>H+30) coins.splice(i,1);
-    }
-
-    requestAnimationFrame(step);
   }
-  requestAnimationFrame(step);
+  function stepFx(ts){
+    g.clearRect(0,0,fx.width,fx.height);
+    for(let i=P.length-1;i>=0;i--){
+      const p=P[i];
+      p.vy += 0.08;
+      p.x += p.vx; p.y += p.vy;
+      p.life -= 0.008;
+      if(p.life<=0 || p.y>fx.height+20){ P.splice(i,1); continue; }
+      g.beginPath();
+      g.arc(p.x,p.y,p.r,0,Math.PI*2);
+      if(p.kind==='coin'){ g.fillStyle = '#ffd166'; g.strokeStyle = '#b68b27'; g.lineWidth = 1; g.fill(); g.stroke(); }
+      else { g.fillStyle = 'rgba(255,255,255,0.9)'; g.fill(); }
+    }
+    // floating texts
+    for(let i=FLOATS.length-1;i>=0;i--){
+      const f = FLOATS[i];
+      f.el.style.transform = `translate(${f.x}px, ${f.y}px)`;
+      f.y -= 0.5; f.t += 1/60;
+      if(f.t>2){ f.el.remove(); FLOATS.splice(i,1); }
+    }
+    requestAnimationFrame(stepFx);
+  }
+  requestAnimationFrame(stepFx);
 
-  function showToast(text, name){
-    toast.innerHTML = `${text} <span class="badge">${name}</span>`;
-    toast.classList.add('show');
-    setTimeout(()=>toast.classList.remove('show'), 1200);
+  function floatText(x,y,html,cls=''){
+    const el = document.createElement('div');
+    el.className = 'floating ' + cls;
+    el.style.left = '0'; el.style.top = '0';
+    el.style.transform = `translate(${x}px, ${y}px)`;
+    el.innerHTML = html;
+    document.body.appendChild(el);
+    FLOATS.push({el, x, y, t:0});
   }
 
-  // ---- Leaderboard ----
+  // ====== slot animation ======
+  function spinSlot(score){
+    const cells = [...reel.children];
+    const t0 = Date.now();
+    const dur = 900;
+    const id = setInterval(()=>{
+      cells.forEach(c => c.textContent = EMOJIS[(Math.random()*EMOJIS.length)|0]);
+      if(Date.now()-t0 > dur) { clearInterval(id); cells.forEach((c,i)=> c.textContent = ['💎','💎','💎'][i] ); }
+    }, 60);
+
+    // burst
+    spawnBurst(window.innerWidth*0.5, window.innerHeight*0.42, Math.min(120, 40+score/5));
+  }
+
+  // ====== Leaderboard ======
   async function refreshLB(){
     try{
       const res = await fetch('/overlay/state');
       const data = await res.json();
       lb.innerHTML = (data.top10||[]).map((e,i)=>(
-        `<div class="row"><div class="rank">${i+1}</div>`+
-        `<div class="name">${escapeHtml(e.name||e.user||e[0]||'-')}</div>`+
-        `<div class="score">${formatScore(e.score||e[1]||0)}</div></div>`
-      )).join('') || `<div class="row"><div class="name">まだスコアがありません</div></div>`;
+        `<div class="lb-row"><div class="rank">${i+1}</div>`+
+        `<div class="name">${esc(e.name||e.user||e[0]||'-')}</div>`+
+        `<div class="score">${fmt(e.score||e[1]||0)}</div></div>`
+      )).join('') || `<div class="lb-row"><div class="name">まだスコアがありません</div></div>`;
     }catch(e){ console.error(e); }
   }
-  function formatScore(n){ return Math.round(n).toLocaleString('ja-JP'); }
-  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
   setInterval(refreshLB, 3000);
   refreshLB();
 
-  // ---- Socket.IO: play:event を受けたらコイン落下 ----
-  const ioNs = window.location.origin.replace(/^http/, 'ws'); // RenderでもOK
-  const socket = io(`${ioNs}/overlay`, { transports:['websocket'] });
-  socket.on('connect', ()=> log('ws connected'));
-  socket.on('play:event', (evt)=>{
-    const medals = Math.max(5, Math.floor((evt && evt.medals) || 12));
-    dropBundle(Math.min(80, medals), evt.userId || 'user');
-    log(`play:event by ${evt.userId||'user'} x${medals}`);
-    refreshLB(); // 念のため
-  });
-  socket.on('hello', ()=> log('hello from server'));
+  // ====== Toast ======
+  function showToast(text){
+    toast.textContent = text;
+    toast.classList.add('show');
+    setTimeout(()=>toast.classList.remove('show'), 1200);
+  }
 
-  function log(s){ logEl.textContent = s; }
+  // ====== play:event 受信 ======
+  const originWs = window.location.origin.replace(/^http/,'ws');
+  const socket = io(`${originWs}/overlay`, { transports:['websocket'] });
+
+  socket.on('hello', ()=> console.log('hello from server'));
+
+  socket.on('play:event', (evt)=>{
+    const now = Date.now();
+    // combo（2秒以内の連打で伸びる）
+    combo = (now - lastPlayAt < 2000) ? Math.min(20, combo+1) : 1;
+    lastPlayAt = now;
+    comboEl.textContent = combo;
+
+    const user = evt?.userId || 'user';
+    const baseScore = Math.max(10, Math.floor(evt?.result?.score || 0));
+    const score = Math.floor(baseScore * (1 + (combo-1)*0.08));
+    const medals = Math.max(5, Math.floor(evt?.medals || 10));
+    lastUser.textContent = user;
+    lastScore.textContent = fmt(score);
+    medalsEl.textContent = fmt(medals);
+
+    // 見た目の演出
+    showToast(`+${fmt(score)} pt`);
+    spinSlot(score);
+    coinRain(Math.min(120, medals*2));
+    floatText(window.innerWidth*0.5-40, window.innerHeight*0.24, `+${fmt(score)} pt`, '');
+
+    // ジャックポットメーター（疑似：貯まって100%で花火）
+    const add = Math.min(0.15, medals/500); // ギフト強度で上昇
+    setMeter(Math.min(1, jackpot + add));
+    if(jackpot >= 0.999){
+      // 大爆発
+      for(let i=0;i<10;i++) spawnBurst(window.innerWidth*0.5, window.innerHeight*0.42, 80, 'spark');
+      setMeter(0); // リセット
+      floatText(window.innerWidth*0.5-80, window.innerHeight*0.2, '🎉 JACKPOT! 🎉', '');
+    }
+
+    // ランキング更新も呼んでおく
+    refreshLB();
+  });
+
+  // 初期メーター（疑似で0%）
+  setMeter(0);
 })();
 </script>
 </body>

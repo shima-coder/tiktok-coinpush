@@ -3,162 +3,119 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-  <title>TikTok Live: COIN FEVER (Portrait)</title>
+  <title>TikTok Live: COIN FEVER — PixiJS Portrait Slot</title>
   <style>
-    :root {
-      --bg: #05060a;
-      --panel:#0e1014;
-      --panel2:#10131a;
-      --text:#eef1f6;
-      --muted:#9aa0a6;
+    :root{
+      --bg:#05060a;
+      --text:#eaf1ff;
+      --muted:#93a0b4;
       --acc:#00e5a8;
       --acc2:#5b8cff;
       --hot:#ff4d67;
       --good:#38ef7d;
-      --safePad: env(safe-area-inset-top, 8px);
+      --panel:#0d111a;
+      --line:#171f2e;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto}
-
-    /* ===== Portrait frame =====
-       端末の解像度に依存せず “縦長(9:16)の見た目” を維持しつつスケーリングします。
-    */
-    .frame {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: max(8px, var(--safePad));
+    .frame{
+      position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+      padding: max(8px, env(safe-area-inset-top,8px));
     }
-    .phone {
-      /* 9:16 アスペクト比を維持しつつ、画面内に最大化 */
-      width: min(100vw, 56.25vh);     /* 56.25vh = 9/16 * 100 */
-      height: min(177.78vw, 100vh);   /* 177.78vw = 16/9 * 100 */
-      max-height: 100%;
-      max-width: 100%;
-      aspect-ratio: 9/16;
-      border: 1px solid #141825;
-      border-radius: 20px;
-      background: linear-gradient(180deg, #070a10, #05060a);
-      overflow: hidden;
-      display: grid;
-      grid-template-rows: auto 1fr auto auto; /* top / stage / leaderboard / log */
-      gap: 10px;
-      padding: 10px;
-    }
-
-    /* ===== TOP BAR ===== */
-    .bar{
-      display:flex; align-items:center; gap:10px; padding:10px 12px;
-      background: linear-gradient(180deg, #0b0f18, #0a0d14);
-      border:1px solid #141825; border-radius:14px;
-    }
-    .title{ font-weight:700; letter-spacing:.5px; font-size:14px }
-    .pill{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:#0f1420; border:1px solid #192034; color:#cbd5e1; font-size:11px; white-space:nowrap }
-    .meter{ position:relative; flex:1; height:12px; background:#0a0e16; border:1px solid #1a2132; border-radius:999px; overflow:hidden }
-    .meter > .fill{ position:absolute; inset:0; width:0%; background:linear-gradient(90deg, #0048ff, var(--acc)); transition: width .3s ease }
-    .meter-label{ font-size:11px; color:#aab3c2 }
-
-    .topgrid{
+    .phone{
+      width:min(100vw,56.25vh);           /* 9:16 を維持するためのスケール */
+      height:min(177.78vw,100vh);
+      aspect-ratio:9/16;
+      border:1px solid var(--line);
+      border-radius:20px;
+      background: linear-gradient(180deg,#070b12,#05060a);
+      overflow:hidden;
       display:grid;
+      grid-template-rows: auto 1fr auto auto; /* top / stage / leaderboard / log */
+      gap:10px;
+      padding:10px;
+    }
+    .bar{
+      display:grid; gap:8px;
       grid-template-columns: 1fr auto;
-      gap:8px;
       align-items:center;
+      padding:10px 12px;
+      border:1px solid var(--line);
+      border-radius:14px;
+      background: linear-gradient(180deg,#0b1120,#090e18);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
     }
+    .title{ font-weight:800; letter-spacing:.4px; font-size:14px }
+    .pill{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:#0e1525; border:1px solid #1a2436; color:#cbd5e1; font-size:11px; white-space:nowrap }
+    .meter{ grid-column: 1 / -1; position:relative; height:12px; border-radius:999px; background:#0a0f18; border:1px solid #182032; overflow:hidden }
+    .meter .fill{ position:absolute; inset:0; width:0%; background:linear-gradient(90deg,#1240ff,#4dd4ff,#00e5a8); filter:brightness(1.15); transition:width .35s cubic-bezier(.2,.8,.2,1) }
 
-    /* ===== STAGE (slot & effects) ===== */
     .stage{
-      position:relative; overflow:hidden; border:1px solid #141825; border-radius:16px;
-      background: radial-gradient(800px 800px at 50% 10%, #0b1320, #05060a);
-      min-height: 54vh; /* 縦の大半をスロットに */
-      display:flex; align-items:center; justify-content:center;
+      position:relative; border:1px solid var(--line); border-radius:16px; overflow:hidden;
+      background:
+        radial-gradient(60% 30% at 50% 10%, rgba(16,24,48,.6), transparent 70%),
+        radial-gradient(90% 80% at 50% 100%, #05080f, #05060a 60%);
     }
-    .slot{
-      width: 86%;
-      max-width: 560px;
-      aspect-ratio: 3/1; /* 3セル×1段を大きく */
-      background: linear-gradient(180deg,#0e1522,#0a0e18);
-      border:1px solid #1a2336; border-radius:18px;
-      display:grid; grid-template-columns: repeat(3, 1fr);
-      gap:8px; padding:10px;
-      box-shadow: 0 10px 40px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.04);
+    /* Canvas を覆う前景のライト筋 */
+    .stage::after{
+      content:""; position:absolute; inset:-20% -10% auto -10%; height:60%;
+      background: conic-gradient(from 180deg at 50% 0%, rgba(255,255,255,.045), rgba(255,255,255,0) 30%, rgba(255,255,255,.045) 60%, rgba(255,255,255,0));
+      mix-blend-mode: overlay; pointer-events:none;
+      filter: blur(18px);
     }
-    .cell{
-      display:flex; align-items:center; justify-content:center;
-      font-size: min(12vw, 96px); /* 端末幅に応じて自動拡大 */
-      background: radial-gradient(220px 120px at 50% 45%, #101a2a, #0a0f18);
-      border:1px solid #1b2740; border-radius:14px; user-select:none;
-    }
-    .banner{
-      position:absolute; left:50%; top:6%; transform:translateX(-50%);
-      padding:8px 14px; border-radius:12px; background:rgba(0,0,0,.35); border:1px solid #1b2333; font-weight:700;
-      box-shadow: 0 8px 30px rgba(0,0,0,.4); font-size:14px;
-      display:none;
-    }
-    .combo{
-      position:absolute; right:10px; top:10px; background:rgba(0,0,0,.35); border:1px solid #1b2436; border-radius:12px;
-      padding:6px 10px; font-weight:700; font-size:13px;
-    }
-    .combo .x { color:var(--hot) }
 
-    /* effects */
-    .float{ position:absolute; pointer-events:none; font-size:22px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.45)); }
-    .burst{ position:absolute; pointer-events:none; width:10px; height:10px; border-radius:50%; background:var(--acc); box-shadow:0 0 16px var(--acc2); opacity:.9 }
-
-    /* ===== LEADERBOARD ===== */
-    .panel{
-      background: linear-gradient(180deg, #0b1018, #080c12);
-      border:1px solid #171e2c; border-radius:14px; padding:10px;
-    }
+    /* 下部のパネル群（ランキング/ログ） */
+    .panel{ background: linear-gradient(180deg,#0b1018,#080c12); border:1px solid #172235; border-radius:14px; padding:10px }
     .panel h3{ margin:0 0 6px 0; font-size:14px }
     .lb-item{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 8px; border-radius:10px; }
-    .lb-item:nth-child(odd){ background: rgba(255,255,255,.02) }
+    .lb-item:nth-child(odd){ background: rgba(255,255,255,.03) }
     .rank{ width:22px; text-align:center; color:#a5b4c3; font-size:12px }
     .uid{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px }
     .score{ font-weight:700; color:#e8eef7; font-size:12px }
-
-    /* ===== LOG ===== */
     .log{ font-size:11px; color:#aab3c2; white-space:pre-line; max-height:18vh; overflow:auto }
 
-    @media (max-width: 420px){
+    /* 画面上に重ねる小UI */
+    .combo{
+      position:absolute; right:10px; top:10px;
+      background:rgba(0,0,0,.35); border:1px solid #1b2436; border-radius:12px;
+      padding:6px 10px; font-weight:800; font-size:13px; z-index:3;
+    }
+    .combo .x{ color:var(--hot) }
+    .banner{
+      position:absolute; left:50%; top:6%; transform:translateX(-50%);
+      padding:8px 14px; border-radius:12px; background:rgba(0,0,0,.5); border:1px solid #1b2333; font-weight:900;
+      box-shadow: 0 8px 30px rgba(0,0,0,.4); font-size:14px; z-index:3; display:none;
+    }
+
+    @media (max-width:420px){
       .title{ font-size:13px }
-      .cell{ font-size: min(14vw, 84px) }
     }
   </style>
 </head>
 <body>
   <div class="frame">
     <div class="phone">
-      <!-- ===== TOP ===== -->
+      <!-- ==== TOP ==== -->
       <div class="bar">
-        <div class="topgrid" style="width:100%">
-          <div class="title">🎰 COIN FEVER Overlay</div>
-          <div class="pill">Socket: <span id="conn-status">connecting...</span></div>
-          <div class="meter" title="Jackpot Meter" style="grid-column: 1 / -1;">
-            <div class="fill" id="jp-fill" style="width:0%"></div>
-          </div>
-        </div>
+        <div class="title">🎰 COIN FEVER — Casino Style</div>
+        <div class="pill">Socket: <span id="conn-status">connecting...</span></div>
+        <div class="meter"><div class="fill" id="jp-fill"></div></div>
       </div>
 
-      <!-- ===== STAGE ===== -->
+      <!-- ==== STAGE (PixiJS canvas lives here) ==== -->
       <div class="stage" id="stage">
-        <div class="slot" id="slot">
-          <div class="cell" id="c0">💰</div>
-          <div class="cell" id="c1">💰</div>
-          <div class="cell" id="c2">💰</div>
-        </div>
-        <div class="banner" id="banner"></div>
         <div class="combo" id="combo">COMBO <span class="x">x1.0</span></div>
+        <div class="banner" id="banner"></div>
+        <!-- PixiJS app will be mounted here -->
       </div>
 
-      <!-- ===== LEADERBOARD ===== -->
+      <!-- ==== LEADERBOARD ==== -->
       <div class="panel">
         <h3>🏆 ランキング Top10（今日）</h3>
         <div id="lb"></div>
       </div>
 
-      <!-- ===== LOG ===== -->
+      <!-- ==== LOG ==== -->
       <div class="panel">
         <h3>🎯 最近のヒット</h3>
         <div id="log" class="log"></div>
@@ -166,209 +123,465 @@
     </div>
   </div>
 
-  <!-- Socket.IO CDN -->
+  <!-- Socket.IO & PixiJS -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/pixi.js@7.4.0/dist/pixi.min.js" crossorigin="anonymous"></script>
+
   <script>
-    // ===== helpers =====
-    const $ = (sel) => document.querySelector(sel);
-    const EMOJIS = ['💰','🪙','💎','⭐','🍀','🔥','🎁','🎉'];
-    const stage = $('#stage');
-    const reelCells = [$('#c0'), $('#c1'), $('#c2')];
-    const banner = $('#banner');
-    const jpFill = $('#jp-fill');
-    const comboEl = $('#combo');
-    const connStatus = $('#conn-status');
-    const lbEl = $('#lb');
-    const logEl = $('#log');
+  // =========================
+  //  Utilities & DOM handles
+  // =========================
+  const $ = (s)=>document.querySelector(s);
+  const stageEl = $('#stage');
+  const connStatus = $('#conn-status');
+  const lbEl = $('#lb');
+  const logEl = $('#log');
+  const jpFill = $('#jp-fill');
+  const banner = $('#banner');
+  const comboEl = $('#combo');
 
-    function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
-    function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
-    function now(){ return performance.now(); }
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+  function log(s){
+    const lines = (logEl.textContent || '').split('\n').filter(Boolean).slice(-18);
+    lines.push(s);
+    logEl.textContent = lines.join('\n');
+  }
 
-    // ===== jackpot meter =====
-    let jpValue = 0; // 0..1
-    function addJackpot(deltaScore){
-      jpValue = clamp(jpValue + deltaScore/5000, 0, 1);
-      jpFill.style.width = (jpValue*100).toFixed(1) + '%';
+  // =========================
+  //  PixiJS App (portrait)
+  // =========================
+  const app = new PIXI.Application({
+    resizeTo: stageEl,
+    backgroundAlpha: 0,
+    antialias: true,
+    powerPreference: 'high-performance',
+  });
+  stageEl.appendChild(app.view);
+
+  // Layers
+  const root = new PIXI.Container(); app.stage.addChild(root);
+  const bgLayer = new PIXI.Container(); root.addChild(bgLayer);
+  const reelLayer = new PIXI.Container(); root.addChild(reelLayer);
+  const fxLayer = new PIXI.Container(); root.addChild(fxLayer);
+
+  // ---- Background vignette & subtle particles ----
+  const g = new PIXI.Graphics();
+  function drawBG(){
+    g.clear();
+    const {width:w, height:h} = app.renderer;
+    // frame glow
+    const grad = new PIXI.Graphics();
+    grad.beginFill(0x0b1322, 0.9).drawRoundedRect(0,0,w,h,18).endFill();
+    grad.alpha = 0.25;
+    bgLayer.removeChildren();
+    bgLayer.addChild(grad);
+
+    // slow dust particles (GPU-cheap)
+    for (let i=0;i<30;i++){
+      const p = new PIXI.Graphics();
+      p.beginFill(0xffffff, Math.random()*0.15+0.05).drawCircle(0,0, Math.random()*1.5+0.8).endFill();
+      p.x = Math.random()*w; p.y = Math.random()*h;
+      p.alpha *= 0.5;
+      p.blendMode = PIXI.BLEND_MODES.SCREEN;
+      p.speed = (Math.random()*0.2+0.05);
+      bgLayer.addChild(p);
     }
-
-    // ===== combo =====
-    let lastHitAt = 0;
-    let comboMul = 1.0;
-    function onComboHit(){
-      const t = now();
-      const dt = (t - lastHitAt) / 1000;
-      lastHitAt = t;
-      if (dt < 2.5) comboMul = clamp(comboMul + 0.25, 1, 5);
-      else comboMul = 1.0;
-      comboEl.querySelector('.x').textContent = 'x' + comboMul.toFixed(1);
-      comboEl.animate([{transform:'scale(1.0)'},{transform:'scale(1.15)'},{transform:'scale(1.0)'}], {duration:260, easing:'ease-out'});
+  }
+  drawBG();
+  app.ticker.add(()=> {
+    // drift
+    for (const p of bgLayer.children.slice(1)) {
+      p.y -= p.speed;
+      if (p.y < -10) p.y = app.renderer.height + 10;
     }
+  });
 
-    // ===== slot animation =====
-    async function spinSlot(final='💎'){
-      const t0 = now();
-      const dur = 900, sp = 60;
-      while (now() - t0 < dur){
-        reelCells.forEach(c => c.textContent = EMOJIS[(Math.random()*EMOJIS.length)|0]);
-        await sleep(sp);
+  // =========================
+  //  Slot Reels (3×1)
+  // =========================
+  const SYMBOLS = [
+    {ch:'🪙', color:0xffd54a},
+    {ch:'⭐', color:0xfff9a6},
+    {ch:'🎁', color:0xff7fb0},
+    {ch:'🔥', color:0xff694a},
+    {ch:'💎', color:0x7fd4ff},
+    {ch:'🍀', color:0x6aff92}
+  ];
+
+  // Create symbol textures (text-based, no external images)
+  function makeSymbolTexture(ch, color){
+    const c = new PIXI.Container();
+    const bg = new PIXI.Graphics()
+      .beginFill(0x0e1626).drawRoundedRect(0,0,220,220,26).endFill();
+    bg.lineStyle(3,0x1c2a48,1).drawRoundedRect(1.5,1.5,217,217,24);
+    const txt = new PIXI.Text(ch, {
+      fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, system-ui, sans-serif',
+      fontSize: 120,
+      align: 'center'
+    });
+    txt.anchor.set(0.5);
+    txt.x = 110; txt.y = 110;
+    // glow behind
+    const glow = new PIXI.Graphics().beginFill(color, 0.18).drawCircle(110,110,80).endFill();
+    glow.blurFilter = new PIXI.filters.BlurFilter(18);
+    glow.filters = [glow.blurFilter];
+    c.addChild(bg, glow, txt);
+    const rt = app.renderer.generateTexture(c, {resolution:2, scaleMode:PIXI.SCALE_MODES.LINEAR});
+    c.destroy({children:true, texture:true, baseTexture:true});
+    return rt;
+  }
+
+  const textures = {};
+  for (const s of SYMBOLS) textures[s.ch] = makeSymbolTexture(s.ch, s.color);
+
+  // Reel params
+  const REEL_W = 240, REEL_H = 240;
+  const GAP = 14;
+
+  // Reel container with masking
+  const reelMask = new PIXI.Graphics();
+  const reels = [];
+  function layoutReels(){
+    reelLayer.removeChildren();
+    const {width:W, height:H} = app.renderer;
+
+    const slotW = Math.min(W * 0.86, 720);
+    const slotH = REEL_H + 20;
+    const totalW = REEL_W*3 + GAP*2;
+    const scale = slotW / totalW;
+
+    const slot = new PIXI.Container();
+    slot.x = (W - slotW)/2; slot.y = (H - slotH)/2;
+    slot.scale.set(scale);
+    reelLayer.addChild(slot);
+
+    // Frame gloss
+    const frame = new PIXI.Graphics();
+    frame.lineStyle(8, 0x1a2b4a, 1).beginFill(0x0e1522).drawRoundedRect(-12,-12,totalW+24,REEL_H+24,22).endFill();
+    frame.filters = [new PIXI.filters.BlurFilter(1.5)];
+    slot.addChild(frame);
+
+    // Mask viewport
+    reelMask.clear();
+    reelMask.beginFill(0xffffff).drawRoundedRect(0,0,totalW,REEL_H,16).endFill();
+    const view = new PIXI.Container();
+    view.mask = reelMask;
+    view.addChild(reelMask);
+    slot.addChild(view);
+
+    // Create 3 reels
+    reels.length = 0;
+    for (let i=0;i<3;i++){
+      const rc = new PIXI.Container();
+      rc.x = i*(REEL_W+GAP); rc.y = 0;
+      view.addChild(rc);
+
+      // fill with symbols repeated vertically
+      const order = [...SYMBOLS.map(s=>s.ch), ...SYMBOLS.map(s=>s.ch)]; // repeat for scroll
+      let y = -REEL_H*order.length*0.5; // start offset
+      for (const ch of order){
+        const spr = new PIXI.Sprite(textures[ch]);
+        spr.x = (REEL_W - spr.width)/2;
+        spr.y = y;
+        rc.addChild(spr);
+        y += REEL_H;
       }
-      reelCells.forEach((c)=> c.textContent = final);
-      banner.textContent = final === '💎' ? 'MEGA HIT!' : 'HIT!';
-      banner.style.display = 'block';
-      banner.animate([{opacity:0, transform:'translateY(-6px)'},{opacity:1, transform:'translateY(0)'}], {duration:220, easing:'ease-out'});
-      setTimeout(()=> banner.style.display='none', 900);
+      reels.push({c: rc, vy: 0, target: null, spinning:false});
     }
 
-    // ===== particles / coins =====
-    const FLOATS = []; // {el,x,y,t,vy}
-    function spawnFloat(x, y, char='🪙'){
-      const el = document.createElement('div');
-      el.className = 'float';
-      el.textContent = char;
-      stage.appendChild(el);
-      FLOATS.push({el, x, y, t:0, vy: - (2 + Math.random()*1.5)});
+    // front glossy lines
+    const gloss = new PIXI.Graphics();
+    gloss.lineStyle(2, 0x2e4578, 1);
+    gloss.moveTo(REEL_W+GAP/2, -6).lineTo(REEL_W+GAP/2, REEL_H+6);
+    gloss.moveTo(REEL_W*2+GAP*1.5, -6).lineTo(REEL_W*2+GAP*1.5, REEL_H+6);
+    slot.addChild(gloss);
+  }
+  layoutReels();
+  app.renderer.on('resize', layoutReels);
+
+  // Spin control
+  function randChoice(arr){ return arr[(Math.random()*arr.length)|0]; }
+
+  async function spinReels(finalSymbols = null){
+    // finalSymbols: array of 3 emojis (or null = random)
+    // 1) accelerate
+    for (let i=0;i<3;i++){
+      const r = reels[i];
+      r.spinning = true;
+      r.vy = 48 + i*4; // slight offset
     }
-    function spawnBurst(x, y, n=18){
-      for(let i=0;i<n;i++){
-        const p = document.createElement('div');
-        p.className = 'burst';
-        const a = Math.random()*Math.PI*2;
-        const v = 1.5 + Math.random()*2.2;
-        p.dataset.vx = (Math.cos(a)*v).toString();
-        p.dataset.vy = (Math.sin(a)*v).toString();
-        p.style.left = x+'px';
-        p.style.top = y+'px';
-        stage.appendChild(p);
-        setTimeout(()=>p.remove(), 900);
-      }
+    const accelTime = 400; const t0 = performance.now();
+    while (performance.now() - t0 < accelTime){
+      advance(1);
+      await PIXI.Ticker.shared.stop ? Promise.resolve() : new Promise(r=>requestAnimationFrame(r));
     }
-    function coinRain(n=24){
-      const W = stage.clientWidth;
-      for(let i=0;i<n;i++){
-        setTimeout(()=>{
-          spawnFloat(Math.random()*W, -20, Math.random() < .15 ? '💎':'🪙');
-        }, i*60);
-      }
+
+    // 2) steady spin for a moment
+    const steadyTime = 300 + Math.random()*200;
+    const t1 = performance.now();
+    while (performance.now() - t1 < steadyTime){
+      advance(1);
+      await new Promise(r=>requestAnimationFrame(r));
     }
-    function loop(){
-      const W = stage.clientWidth, H = stage.clientHeight;
-      document.querySelectorAll('.burst').forEach(b=>{
-        const vx = parseFloat(b.dataset.vx), vy = parseFloat(b.dataset.vy);
-        const x = parseFloat(b.style.left), y = parseFloat(b.style.top);
-        const ny = y + vy*6; const nx = x + vx*6;
-        b.style.left = nx+'px'; b.style.top = ny+'px';
-        b.style.opacity = Math.max(0, (parseFloat(b.style.opacity||'0.9') - 0.02)).toString();
+
+    // 3) decide final symbols
+    const finals = finalSymbols && finalSymbols.length===3 ? finalSymbols : [randChoice(SYMBOLS).ch, randChoice(SYMBOLS).ch, randChoice(SYMBOLS).ch];
+
+    // 4) decelerate reels one by one with snap
+    for (let i=0;i<3;i++){
+      await stopReelTo(i, finals[i]);
+    }
+
+    // return finals for UI
+    return finals;
+  }
+
+  function advance(dt){
+    for (const r of reels){
+      if (!r.spinning) continue;
+      r.c.children.forEach(spr=>{
+        spr.y += r.vy*dt;
+        if (spr.y > REEL_H* (SYMBOLS.length)) spr.y -= REEL_H*SYMBOLS.length*2;
       });
+    }
+  }
 
-      for(let i=FLOATS.length-1;i>=0;i--){
-        const f = FLOATS[i];
-        f.t += 0.016;
-        f.vy += 0.05;      // gravity
-        f.x += Math.sin(f.t*1.5)*1.2; // 横振れは縦画面向けに控えめ
-        f.y += f.vy*2.6;
-        f.el.style.left = (f.x)+'px';
-        f.el.style.top  = (f.y)+'px';
-        if(f.y > H+60){ f.el.remove(); FLOATS.splice(i,1); }
+  function currentTopSymbolIndex(rc){
+    // find sprite closest to y == 0
+    let best=null, bestDist=1e9, idx=0;
+    rc.children.forEach((spr,i)=>{
+      const d = Math.abs(spr.y);
+      if (d < bestDist){ best=spr; bestDist=d; idx=i; }
+    });
+    return idx % SYMBOLS.length;
+  }
+
+  async function stopReelTo(i, ch){
+    const r = reels[i];
+    const targetIdx = SYMBOLS.findIndex(s=>s.ch===ch);
+    const easeOut = t => 1 - Math.pow(1-t, 2.2);
+    const startVy = r.vy;
+    const dur = 700 + i*130;
+
+    const t0 = performance.now();
+    return new Promise(resolve=>{
+      function step(){
+        const t = (performance.now()-t0)/dur;
+        if (t >= 1){
+          r.vy = 0;
+          r.spinning = false;
+
+          // snap to exact symbol (center)
+          // compute offset to align desired symbol at y==0
+          const topIdx = currentTopSymbolIndex(r.c);
+          let diff = (targetIdx - topIdx + SYMBOLS.length) % SYMBOLS.length;
+          const adjust = diff * REEL_H;
+          r.c.children.forEach(spr=> spr.y -= adjust);
+
+          // bounce
+          bounceReel(i);
+          return resolve();
+        }
+        r.vy = startVy * (1 - easeOut(t)) + 2.2; // keep small drift
+        advance(1);
+        requestAnimationFrame(step);
       }
-      requestAnimationFrame(loop);
+      step();
+    });
+  }
+
+  function bounceReel(i){
+    const r = reels[i].c;
+    const k = new PIXI.Container();
+    k.addChild(r);
+    reelLayer.addChild(k);
+    // quick squash effect
+    const a = [{sy:1, t:0},{sy:0.92, t:80},{sy:1.0, t:180}];
+    const t0 = performance.now();
+    function anim(){
+      const t = performance.now() - t0;
+      if (t >= a[a.length-1].t){ k.scale.y = 1; return; }
+      const p = t<80 ? t/80 : (t-80)/100;
+      const sy = t<80 ? 1 - 0.08*p : 0.92 + 0.08*p;
+      k.scale.y = sy;
+      requestAnimationFrame(anim);
     }
-    requestAnimationFrame(loop);
+    anim();
+  }
 
-    // ===== leaderboard =====
-    function renderLB(list){
-      lbEl.innerHTML = '';
-      list.forEach((it, idx) => {
-        const row = document.createElement('div');
-        row.className = 'lb-item';
-        row.innerHTML = `
-          <div class="rank">${idx+1}</div>
-          <div class="uid">${escapeHtml(it.userId || 'anon')}</div>
-          <div class="score">${Number(it.score||0).toLocaleString()}</div>
-        `;
-        lbEl.appendChild(row);
-      });
+  // =========================
+  //  Particles / FX
+  // =========================
+  function sparkleBurst(x, y, n=24, color=0x66ccff){
+    for (let i=0;i<n;i++){
+      const dot = new PIXI.Graphics();
+      dot.beginFill(0xffffff).drawCircle(0,0, Math.random()*1.8+0.7).endFill();
+      const spr = new PIXI.Sprite(app.renderer.generateTexture(dot));
+      spr.x = x; spr.y = y;
+      spr.tint = color;
+      spr.alpha = 0.9;
+      spr.blendMode = PIXI.BLEND_MODES.ADD;
+      spr.vx = (Math.random()*2-1) * (3+Math.random()*3);
+      spr.vy = (Math.random()*2-1) * (3+Math.random()*3);
+      spr.vr = (Math.random()*2-1) * 0.12;
+      spr.life = 36 + (Math.random()*12|0);
+      fxLayer.addChild(spr);
     }
+  }
 
-    // ===== socket & data =====
-    const socket = io('/overlay', { transports:['websocket'], timeout: 8000, reconnection: true, reconnectionDelay: 800, reconnectionDelayMax: 4000 });
-    socket.on('connect', ()=>{ connStatus.textContent='connected'; connStatus.style.color = 'var(--good)'; });
-    socket.on('disconnect', ()=>{ connStatus.textContent='disconnected'; connStatus.style.color = 'var(--hot)'; });
-    socket.on('connect_error', ()=>{ connStatus.textContent='error'; connStatus.style.color = 'var(--hot)'; });
+  function coinRain(count=30){
+    const {width:W} = app.renderer;
+    for (let i=0;i<count;i++){
+      setTimeout(()=>{
+        const t = new PIXI.Text('🪙', {fontSize: 32});
+        t.x = Math.random()*W; t.y = -20;
+        t.vy = 2 + Math.random()*2.5;
+        t.vx = (Math.random()*2-1) * 0.6;
+        t.blendMode = PIXI.BLEND_MODES.SCREEN;
+        t.alpha = 0.92;
+        fxLayer.addChild(t);
+        t.update = ()=> {
+          t.x += t.vx; t.y += t.vy;
+          t.vy += 0.04;
+          if (t.y > app.renderer.height + 40){ t.destroy(); }
+        };
+      }, i*40);
+    }
+  }
 
-    socket.on('hello', (p)=> log(`hello: ${new Date(p.ts).toLocaleTimeString()}`));
-    socket.on('leaderboard:update', (top10)=> renderLB(top10 || []));
+  // animate FX
+  app.ticker.add(()=>{
+    for (const s of fxLayer.children){
+      if (s.life!==undefined){
+        s.x += s.vx; s.y += s.vy; s.rotation += s.vr;
+        s.alpha -= 0.02;
+        s.life--;
+        if (s.life<=0 || s.alpha<=0) s.destroy();
+      } else if (s.update){ s.update(); }
+    }
+  });
 
-    // 新ペイロード( spin )にも対応
-    const TIER = {
-      MISS:   { stop:'⭐',  burst:10, rain:8,  banner:'TRY AGAIN', color:'var(--muted)' },
-      NORMAL: { stop:'🎁',  burst:16, rain:18, banner:'HIT!',      color:'var(--acc2)' },
-      HIGH:   { stop:'💎',  burst:22, rain:28, banner:'BIG HIT!',  color:'var(--acc)'  },
-      MEGA:   { stop:'💎',  burst:28, rain:44, banner:'MEGA HIT!', color:'var(--hot)'  },
-    };
+  // =========================
+  //  Combo & Jackpot (DOM)
+  // =========================
+  let jpValue = 0;
+  function addJackpot(deltaScore){
+    jpValue = clamp(jpValue + deltaScore / 6000, 0, 1);
+    jpFill.style.width = (jpValue*100).toFixed(1)+'%';
+  }
+  setInterval(()=>{
+    jpValue = clamp(jpValue - 0.0025, 0, 1);
+    jpFill.style.width = (jpValue*100).toFixed(1)+'%';
+  }, 220);
 
-    socket.on('play:event', async (payload)=>{
-      try{
-        if (payload && payload.spin) {
-          const { tier, symbols, multiplier, bonusGame, comboExtend } = payload.spin;
-          if (comboExtend) onComboHit(); else { comboMul = 1.0; comboEl.querySelector('.x').textContent = 'x1.0'; }
-          addJackpot((payload.jpDelta||0) + (payload.score||0));
+  let lastHitAt = 0, comboMul = 1.0;
+  function onComboHit(extend=true){
+    const t = performance.now();
+    const dt = (t - lastHitAt)/1000;
+    lastHitAt = t;
+    if (extend && dt < 2.5) comboMul = clamp(comboMul + 0.25, 1, 5);
+    else if (!extend) comboMul = 1.0;
+    comboEl.querySelector('.x').textContent = 'x' + comboMul.toFixed(1);
+    comboEl.animate([{transform:'scale(1.0)'},{transform:'scale(1.12)'},{transform:'scale(1.0)'}], {duration:260, easing:'ease-out'});
+  }
 
-          await spinSlot(TIER[tier]?.stop || '⭐');
-          if (Array.isArray(symbols) && symbols.length === 3) {
-            reelCells.forEach((c,i)=> c.textContent = symbols[i]);
-          }
+  function showBanner(text, color){
+    banner.textContent = text;
+    banner.style.color = color || '#fff';
+    banner.style.display = 'block';
+    banner.animate([{opacity:0, transform:'translate(-50%,-6px)'},{opacity:1, transform:'translate(-50%,0)'}], {duration:220, easing:'ease-out'});
+    setTimeout(()=> banner.style.display='none', 900);
+  }
 
-          const r = stage.getBoundingClientRect();
-          spawnBurst(r.left + r.width*0.5, r.top + r.height*0.42, TIER[tier]?.burst ?? 16);
-          coinRain(TIER[tier]?.rain ?? 16);
-          banner.textContent = TIER[tier]?.banner || 'HIT!';
-          banner.style.color = TIER[tier]?.color || '#fff';
-          banner.style.display = 'block';
-          setTimeout(()=> banner.style.display='none', 900);
+  // =========================
+  //  Leaderboard DOM
+  // =========================
+  function renderLB(list){
+    lbEl.innerHTML = '';
+    (list||[]).forEach((it, idx)=>{
+      const row = document.createElement('div');
+      row.className = 'lb-item';
+      row.innerHTML = `
+        <div class="rank">${idx+1}</div>
+        <div class="uid">${escapeHtml(it.userId || 'anon')}</div>
+        <div class="score">${Number(it.score||0).toLocaleString()}</div>
+      `;
+      lbEl.appendChild(row);
+    });
+  }
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+  }
 
-          log(`+${(payload.score||0)}  ${payload.userId||'anon'}  [${tier}] x${(multiplier||1).toFixed(2)}  jp:+${payload.jpDelta||0}`);
+  // =========================
+  //  Socket.IO wiring
+  // =========================
+  const socket = io('/overlay', { transports:['websocket'], timeout: 8000, reconnection: true, reconnectionDelay: 800, reconnectionDelayMax: 4000 });
+  socket.on('connect', ()=>{ connStatus.textContent='connected'; connStatus.style.color='var(--good)'; });
+  socket.on('disconnect', ()=>{ connStatus.textContent='disconnected'; connStatus.style.color='var(--hot)'; });
+  socket.on('connect_error', ()=>{ connStatus.textContent='error'; connStatus.style.color='var(--hot)'; });
 
-          if (bonusGame) {
-            setTimeout(()=>{
-              coinRain(60);
-              spawnBurst(r.left + r.width*0.5, r.top + r.height*0.42, 36);
-            }, 400);
-          }
-          return;
+  socket.on('hello', (p)=> log(`hello: ${new Date(p.ts).toLocaleTimeString()}`));
+  socket.on('leaderboard:update', (top10)=> renderLB(top10 || []));
+
+  // ティア→演出辞書（新payload用）
+  const TIER = {
+    MISS:   { stop:'⭐',  burst:12, rain:10, banner:'TRY AGAIN', color:'#9aa7bd' },
+    NORMAL: { stop:'🎁',  burst:18, rain:22, banner:'HIT!',      color:'#7bb0ff' },
+    HIGH:   { stop:'💎',  burst:26, rain:32, banner:'BIG HIT!',  color:'#00e5a8' },
+    MEGA:   { stop:'💎',  burst:36, rain:56, banner:'MEGA HIT!', color:'#ff4d67' },
+  };
+
+  socket.on('play:event', async (payload)=>{
+    try{
+      // ===== 新形式（spin あり）優先 =====
+      if (payload && payload.spin) {
+        const { tier, symbols, multiplier, bonusGame, comboExtend } = payload.spin;
+        // combo & jackpot
+        onComboHit(comboExtend!==false);
+        addJackpot((payload.jpDelta||0) + (payload.score||0));
+
+        // spin reels → stop on symbols
+        const finals = await spinReels(Array.isArray(symbols)&&symbols.length===3 ? symbols : null);
+
+        // FX
+        const cx = app.renderer.width/2, cy = app.renderer.height/2;
+        sparkleBurst(cx, cy-10, TIER[tier]?.burst ?? 18, (TIER[tier]?.color ? PIXI.utils.string2hex(TIER[tier].color) : 0x66ccff));
+        coinRain(TIER[tier]?.rain ?? 20);
+        showBanner(TIER[tier]?.banner || 'HIT!', TIER[tier]?.color || '#fff');
+
+        // 強演出（MEGA/bonus）
+        if (tier==='MEGA' || bonusGame){
+          setTimeout(()=>{
+            coinRain(60);
+            sparkleBurst(cx, cy-12, 48, 0xffe066);
+          }, 300);
         }
 
-        // 旧形式フォールバック
-        const { userId, fallen=0, bonus=0, jpDelta=0, score=0 } = payload || {};
-        onComboHit();
-        addJackpot((jpDelta||0) + (score||0));
-        await spinSlot(fallen >= 3 || bonus > 0 ? '💎' : '⭐');
-        const r = stage.getBoundingClientRect();
-        spawnBurst(r.left + r.width*0.5, r.top + r.height*0.42, 24);
-        coinRain(clamp(8 + Math.floor(fallen*1.2) + (bonus>0?12:0), 8, 60));
-        log(`+${(score||0)}  ${userId || 'anon'}  (fallen:${fallen}, bonus:${bonus}, jp:+${jpDelta||0})`);
-      }catch(e){
-        console.error(e);
+        log(`+${(payload.score||0)}  ${payload.userId||'anon'}  [${tier}] x${(multiplier||1).toFixed(2)}  jp:+${payload.jpDelta||0}`);
+        return;
       }
-    });
 
-    // 初期ロード
-    fetch('/overlay/state').then(r=>r.json()).then(d=> renderLB(d.top10 || [])).catch(()=>{});
+      // ===== 旧形式フォールバック =====
+      const { userId, fallen=0, bonus=0, jpDelta=0, score=0 } = payload || {};
+      onComboHit(true);
+      addJackpot((jpDelta||0) + (score||0));
 
-    function log(s){
-      const lines = (logEl.textContent || '').split('\n').filter(Boolean).slice(-18);
-      lines.push(s);
-      logEl.textContent = lines.join('\n');
+      const finals = await spinReels(fallen >= 3 || bonus > 0 ? ['💎','💎','💎'] : null);
+      const cx = app.renderer.width/2, cy = app.renderer.height/2;
+      sparkleBurst(cx, cy-10, 24, 0x66ccff);
+      coinRain(clamp(8 + Math.floor(fallen*1.2) + (bonus>0?12:0), 8, 60));
+      showBanner((fallen>=3||bonus>0)?'HIT!':'TRY AGAIN', (fallen>=3||bonus>0)?'#00e5a8':'#9aa7bd');
+
+      log(`+${(score||0)}  ${userId || 'anon'}  (fallen:${fallen}, bonus:${bonus}, jp:+${jpDelta||0})`);
+    }catch(e){
+      console.error(e);
     }
-    function escapeHtml(s){
-      return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
-    }
+  });
 
-    // JPメーター緩やか減衰
-    setInterval(()=> {
-      jpValue = clamp(jpValue - 0.002, 0, 1);
-      jpFill.style.width = (jpValue*100).toFixed(1) + '%';
-    }, 200);
+  // 初回：ランキング取得
+  fetch('/overlay/state').then(r=>r.json()).then(d=> renderLB(d.top10 || [])).catch(()=>{});
+
   </script>
 </body>
 </html>

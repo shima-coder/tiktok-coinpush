@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc -p .",
+    "postbuild": "cp src/overlay.html dist/overlay.html",
     "start": "node dist/index.js"
   },
   "dependencies": {
@@ -23,13 +24,7 @@
     "@types/pg": "^8.11.6",
     "@types/seedrandom": "^3.0.8"
   },
-  "engines": { "node": ">=18 <23" }
-  {
-  "scripts": {
-    "dev": "tsx src/index.ts",
-    "build": "tsc -p .",
-    "postbuild": "cp src/overlay.html dist/overlay.html",
-    "start": "node dist/index.js"
-  }
+  "engines": {
+    "node": ">=18 <23"
   }
 }

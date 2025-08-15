@@ -1,0 +1,7 @@
+app = "tiktok-encoder"
+[build]
+  dockerfile = "Dockerfile"
+[env]
+  OVERLAY_URL = "https://your-render-app.onrender.com/overlay.html"
+[processes]
+  app = "bash /start.sh"

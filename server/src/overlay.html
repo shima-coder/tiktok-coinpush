@@ -3,241 +3,339 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>TikTok Live: Coin Fever</title>
+  <title>TikTok Live: COIN FEVER</title>
   <style>
     :root {
-      --bg: #05060a; --panel: #0e1014; --panel2:#10131a;
-      --text:#eef1f6; --muted:#9aa0a6; --acc:#00e5a8; --acc2:#5b8cff; --warn:#ffd166; --hot:#ff4d67;
+      --bg: #05060a;
+      --panel: #0e1014;
+      --panel2:#10131a;
+      --text:#eef1f6;
+      --muted:#9aa0a6;
+      --acc:#00e5a8;
+      --acc2:#5b8cff;
+      --warn:#ffd166;
+      --hot:#ff4d67;
+      --good:#38ef7d;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto}
-    .wrap{display:grid;grid-template-columns:1fr 320px;height:100%;}
-    .stage{position:relative;overflow:hidden;background:radial-gradient(1200px 600px at 70% 30%, #0a0f1a, #05060a)}
-    .side{background:linear-gradient(180deg,#0b0d12,#07080c);border-left:1px solid #171a22;padding:14px 12px;overflow:auto}
-    h2{margin:4px 0 10px;font-size:18px}
-    .lb-row{display:flex;align-items:center;gap:10px;padding:8px 6px;border-radius:10px;margin:6px 0;background:rgba(255,255,255,0.03);backdrop-filter: blur(4px)}
-    .rank{width:22px;text-align:right;color:var(--muted)}
-    .name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .score{font-variant-numeric:tabular-nums}
-    .meter-wrap{position:absolute;left:50%;top:10px;transform:translateX(-50%);width:min(820px,80%);background:#0c0f16;border:1px solid #161a24;border-radius:14px;box-shadow:0 10px 30px #0007}
-    .meter-bar{height:16px;background:linear-gradient(90deg,var(--acc),var(--acc2));width:0%;border-radius:14px}
-    .meter{padding:8px 12px}
-    .meter-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:14px;color:#c7cfdb}
-    .slot{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%); width:min(640px,70%); aspect-ratio:16/9; border-radius:18px; background:linear-gradient(180deg,#0b0f17,#0a0c12); border:1px solid #151a24; box-shadow:0 30px 80px #0008; overflow:hidden}
-    .slot-head{padding:10px 16px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(180deg,#111726,#0e1320); border-bottom:1px solid #171d2b}
-    .slot-title{font-weight:800;letter-spacing:.5px}
-    .slot-reel{display:grid;grid-template-columns:1fr 1fr 1fr; gap:8px; padding:18px}
-    .cell{height:120px;border-radius:16px;background:linear-gradient(145deg,#121826,#0a0f1a); border:1px solid #1a2233; display:flex; align-items:center;justify-content:center; font-size:44px}
-    .slot-foot{display:flex;gap:10px;align-items:center;padding:10px 16px;border-top:1px solid #151a24;font-size:14px;color:#c7cfdb}
-    .pill{border:1px solid #1b2230; background:#0c111a; border-radius:999px; padding:4px 10px}
-    .combo{color:#000;background:var(--warn);font-weight:800}
-    .toast{position:absolute; left:50%; top:18%; transform:translateX(-50%); padding:12px 18px; background:#0e121a; border:1px solid #1b2230; border-radius:12px; color:#fff; box-shadow:0 10px 30px #0008; font-size:18px; opacity:0; transition:opacity .2s, transform .2s; pointer-events:none}
-    .toast.show{opacity:1; transform:translateX(-50%) scale(1.02)}
-    canvas.particles{position:absolute; inset:0; pointer-events:none;}
-    .floating{position:absolute; color:#fff; font-weight:800; text-shadow:0 6px 24px #000; pointer-events:none}
-    .streak{color:#000;background:var(--hot);padding:2px 8px;border-radius:999px;margin-left:8px;font-weight:800}
-    .dim{color:#a8b0be}
+    .wrap{
+      display:grid;
+      grid-template-columns: 1fr 320px;
+      grid-template-rows: auto 1fr auto;
+      grid-template-areas:
+        "top top"
+        "stage side"
+        "bottom side";
+      height:100%;
+      gap:8px;
+      padding:8px;
+    }
+    .top { grid-area: top; }
+    .stage{ grid-area: stage; position:relative; overflow:hidden; min-height: 60vh; background: radial-gradient(1000px 480px at 60% 30%, #0a0f1a, #05060a); border:1px solid #141825; border-radius:16px; }
+    .side{ grid-area: side; background:linear-gradient(180deg,#0b0d12,#07080c); border:1px solid #141825; border-radius:16px; padding:12px; overflow:auto; }
+    .bottom { grid-area: bottom; display:flex; gap:8px; }
+
+    /* top bar */
+    .bar{
+      display:flex; align-items:center; gap:12px; padding:10px 12px;
+      background: linear-gradient(180deg, #0b0f18, #0a0d14);
+      border:1px solid #141825; border-radius:16px;
+    }
+    .title{ font-weight:700; letter-spacing:.5px }
+    .pill{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background:#0f1420; border:1px solid #192034; color:#cbd5e1; font-size:12px }
+    .meter{ position:relative; width:100%; height:14px; background:#0a0e16; border:1px solid #1a2132; border-radius:999px; overflow:hidden }
+    .meter > .fill{ position:absolute; inset:0; width:0%; background:linear-gradient(90deg, #0048ff, var(--acc)); transition: width .3s ease }
+    .meter-label{ font-size:12px; color:#aab3c2 }
+
+    /* stage: slot & effects */
+    .slot{
+      position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+      width:min(80vw, 560px); height:160px; background:linear-gradient(180deg,#0e1522,#0a0e18);
+      border:1px solid #1a2336; border-radius:18px; display:grid; grid-template-columns: repeat(3, 1fr);
+      gap:8px; padding:12px; box-shadow: 0 10px 40px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    .cell{
+      display:flex; align-items:center; justify-content:center; font-size:64px;
+      background: radial-gradient(220px 120px at 50% 45%, #101a2a, #0a0f18);
+      border:1px solid #1b2740; border-radius:14px; user-select:none;
+    }
+    .banner{
+      position:absolute; left:50%; top:10%; transform:translateX(-50%);
+      padding:8px 14px; border-radius:12px; background:rgba(0,0,0,.35); border:1px solid #1b2333; font-weight:700;
+      box-shadow: 0 8px 30px rgba(0,0,0,.4);
+    }
+
+    /* floating coins / fireworks */
+    .float{ position:absolute; pointer-events:none; font-size:28px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.45)); }
+    .burst{ position:absolute; pointer-events:none; width:10px; height:10px; border-radius:50%; background:var(--acc); box-shadow:0 0 16px var(--acc2); opacity:.9 }
+
+    /* combo */
+    .combo{
+      position:absolute; right:14px; top:14px; background:rgba(0,0,0,.35); border:1px solid #1b2436; border-radius:12px;
+      padding:8px 12px; font-weight:700;
+    }
+    .combo .x { color:var(--hot) }
+
+    /* side: leaderboard */
+    .panel{ background: linear-gradient(180deg, #0b1018, #080c12); border:1px solid #171e2c; border-radius:14px; padding:10px; }
+    .panel + .panel{ margin-top:10px }
+    .lb-item{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 8px; border-radius:10px; }
+    .lb-item:nth-child(odd){ background: rgba(255,255,255,.02) }
+    .rank{ width:24px; text-align:center; color:#a5b4c3 }
+    .uid{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+    .score{ font-weight:700; color:#e8eef7 }
+
+    /* bottom info */
+    .hint{ flex:1; padding:10px 12px; background:#0b0f18; border:1px solid #141825; border-radius:12px; font-size:12px; color:#9aa0a6 }
+
+    @media (max-width: 960px){
+      .wrap{
+        grid-template-columns: 1fr;
+        grid-template-areas:
+          "top"
+          "stage"
+          "side"
+          "bottom";
+      }
+      .slot{ width:min(92vw, 560px) }
+    }
   </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="stage">
-    <div class="meter-wrap">
-      <div class="meter">
-        <div class="meter-head"><div>JACKPOT POOL</div><div id="meterText" class="dim">0%</div></div>
-        <div class="meter-bar" id="meterBar"></div>
+  <div class="wrap">
+    <!-- TOP BAR -->
+    <div class="top bar">
+      <div class="title">🎰 COIN FEVER Overlay</div>
+      <div class="pill" id="conn-pill">Socket: <span id="conn-status">connecting...</span></div>
+      <div style="flex:1"></div>
+      <div style="min-width:180px">
+        <div class="meter" title="Jackpot Meter">
+          <div class="fill" id="jp-fill" style="width:0%"></div>
+        </div>
+        <div class="meter-label">JACKPOT</div>
       </div>
     </div>
 
-    <div class="slot" id="slot">
-      <div class="slot-head">
-        <div class="slot-title">COIN FEVER</div>
-        <div class="pill" id="lastUser">—</div>
-      </div>
-      <div class="slot-reel" id="reel">
+    <!-- STAGE -->
+    <div class="stage" id="stage">
+      <div class="slot" id="slot">
+        <div class="cell" id="c0">💰</div>
         <div class="cell" id="c1">💰</div>
-        <div class="cell" id="c2">⭐️</div>
-        <div class="cell" id="c3">🍀</div>
+        <div class="cell" id="c2">💰</div>
       </div>
-      <div class="slot-foot">
-        <div class="pill">+<span id="lastScore">0</span> pt</div>
-        <div class="pill combo">COMBO x<span id="combo">1</span></div>
-        <div class="pill">MEDALS <span id="medals">0</span></div>
-      </div>
+      <div class="banner" id="banner" style="display:none"></div>
+      <div class="combo" id="combo">COMBO <span class="x">x1.0</span></div>
     </div>
 
-    <div id="toast" class="toast">+0</div>
-    <canvas class="particles" id="fx" width="1920" height="1080"></canvas>
+    <!-- SIDE -->
+    <aside class="side">
+      <div class="panel">
+        <div style="font-weight:700; margin-bottom:6px">🏆 ランキング Top10（今日）</div>
+        <div id="lb"></div>
+      </div>
+      <div class="panel">
+        <div style="font-weight:700; margin-bottom:6px">🎯 最近のヒット</div>
+        <div id="log" style="font-size:12px; color:#aab3c2; white-space:pre-line"></div>
+      </div>
+    </aside>
+
+    <!-- BOTTOM -->
+    <div class="bottom">
+      <div class="hint">
+        <div><b>テスト送信</b></div>
+        <code>curl -X POST https://&lt;render-app&gt;.onrender.com/ingest/gift -H "Content-Type: application/json" -d '{"userId":"test","amountYen":300}'</code><br/>
+        接続先はこのページをホストしている同一オリジンを想定。別オリジンの場合は CORS と Socket.IO の <code>withCredentials</code> 等の設定を調整してください。
+      </div>
+    </div>
   </div>
 
-  <aside class="side">
-    <h2>Top 10 Today</h2>
-    <div id="lb"></div>
-  </aside>
-</div>
+  <!-- Socket.IO CDN -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
+  <script>
+    // ====== helpers ======
+    const $ = (sel) => document.querySelector(sel);
+    const EMOJIS = ['💰','🪙','💎','⭐','🍀','🔥','🎁','🎉'];
+    const stage = $('#stage');
+    const reelCells = [$('#c0'), $('#c1'), $('#c2')];
+    const banner = $('#banner');
+    const jpFill = $('#jp-fill');
+    const comboEl = $('#combo');
+    const connStatus = $('#conn-status');
+    const lbEl = $('#lb');
+    const logEl = $('#log');
 
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
-<script>
-(() => {
-  // ====== UI refs ======
-  const lb = document.getElementById('lb');
-  const toast = document.getElementById('toast');
-  const meterBar = document.getElementById('meterBar');
-  const meterText = document.getElementById('meterText');
-  const lastUser = document.getElementById('lastUser');
-  const lastScore = document.getElementById('lastScore');
-  const medalsEl = document.getElementById('medals');
-  const comboEl = document.getElementById('combo');
-  const reel = document.getElementById('reel');
-  const fx = document.getElementById('fx');
-  const g = fx.getContext('2d');
+    function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+    function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+    function now(){ return performance.now(); }
 
-  // ====== state ======
-  let combo = 1, lastPlayAt = 0, jackpot = 0; // 0..1
-  const EMOJIS = ['💰','⭐️','🍀','💎','🔥','🎉','🪙','⚡️'];
-  const FLOATS = [];
+    // ====== jackpot meter ======
+    let jpValue = 0;      // 0..1
+    function addJackpot(deltaScore){
+      // 表示用の簡易メーター: スコアの伸びを0..1にクリップ
+      jpValue = clamp(jpValue + deltaScore/5000, 0, 1);
+      jpFill.style.width = (jpValue*100).toFixed(1) + '%';
+    }
 
-  // ====== helpers ======
-  const fmt = (n) => Math.round(n).toLocaleString('ja-JP');
-  const esc = (s) => String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);
-  const setMeter = (pct) => {
-    jackpot = Math.max(0, Math.min(1, pct));
-    meterBar.style.width = (jackpot*100).toFixed(0)+'%';
-    meterText.textContent = (jackpot*100).toFixed(0)+'%';
-  };
+    // ====== combo ======
+    let lastHitAt = 0;
+    let comboMul = 1.0;
+    function onComboHit(){
+      const t = now();
+      const dt = (t - lastHitAt) / 1000;
+      lastHitAt = t;
+      // 2.5秒以内の連打で倍率UP、最大5.0
+      if (dt < 2.5) comboMul = clamp(comboMul + 0.25, 1, 5);
+      else comboMul = 1.0;
+      comboEl.querySelector('.x').textContent = 'x' + comboMul.toFixed(1);
+      comboEl.style.transform = 'scale(1.0)';
+      // 小バウンド
+      comboEl.animate([{transform:'scale(1.0)'},{transform:'scale(1.15)'},{transform:'scale(1.0)'}], {duration:260, easing:'ease-out'});
+    }
 
-  // ====== particles / coin rain ======
-  const P = [];
-  function spawnBurst(x,y,n,kind='coin'){
-    for(let i=0;i<n;i++){
-      P.push({
-        x, y,
-        vx: (Math.random()-0.5)*8, vy: (Math.random()-0.8)*9,
-        r: kind==='coin'? 4+Math.random()*3 : 2+Math.random()*2,
-        life: 1, kind
+    // ====== slot animation ======
+    async function spinSlot(final='💎'){
+      const t0 = now();
+      const dur = 900;
+      const sp = 60;
+      while (now() - t0 < dur){
+        reelCells.forEach(c => c.textContent = EMOJIS[(Math.random()*EMOJIS.length)|0]);
+        await sleep(sp);
+      }
+      reelCells.forEach((c,i)=> c.textContent = final);
+      // flash
+      banner.textContent = final === '💎' ? 'MEGA HIT!' : 'HIT!';
+      banner.style.display = 'block';
+      banner.animate([{opacity:0, transform:'translateX(-50%) translateY(-6px)'},{opacity:1, transform:'translateX(-50%) translateY(0)'}], {duration:220, easing:'ease-out'});
+      setTimeout(()=> banner.style.display='none', 900);
+    }
+
+    // ====== particles / coins ======
+    const FLOATS = []; // {el,x,y,t,vy}
+    function spawnFloat(x, y, char='🪙'){
+      const el = document.createElement('div');
+      el.className = 'float';
+      el.textContent = char;
+      stage.appendChild(el);
+      FLOATS.push({el, x, y, t:0, vy: - (2 + Math.random()*1.5)});
+    }
+    function spawnBurst(x, y, n=18){
+      for(let i=0;i<n;i++){
+        const p = document.createElement('div');
+        p.className = 'burst';
+        const a = Math.random()*Math.PI*2;
+        const v = 1.5 + Math.random()*2.2;
+        p.dataset.vx = (Math.cos(a)*v).toString();
+        p.dataset.vy = (Math.sin(a)*v).toString();
+        p.style.left = x+'px';
+        p.style.top = y+'px';
+        stage.appendChild(p);
+        setTimeout(()=>p.remove(), 900);
+      }
+    }
+    function coinRain(n=24){
+      const W = stage.clientWidth, H = stage.clientHeight;
+      for(let i=0;i<n;i++){
+        setTimeout(()=>{
+          spawnFloat(Math.random()*W, -20, Math.random() < .15 ? '💎':'🪙');
+        }, i*60);
+      }
+    }
+    function loop(){
+      const W = stage.clientWidth, H = stage.clientHeight;
+      // animate bursts
+      document.querySelectorAll('.burst').forEach(b=>{
+        const vx = parseFloat(b.dataset.vx), vy = parseFloat(b.dataset.vy);
+        const x = parseFloat(b.style.left), y = parseFloat(b.style.top);
+        const ny = y + vy*6; const nx = x + vx*6;
+        b.style.left = nx+'px'; b.style.top = ny+'px';
+        b.style.opacity = Math.max(0, (parseFloat(b.style.opacity||'0.9') - 0.02)).toString();
+      });
+
+      // animate floats (coins)
+      for(let i=FLOATS.length-1;i>=0;i--){
+        const f = FLOATS[i];
+        f.t += 0.016;
+        f.vy += 0.05; // gravity
+        f.x += Math.sin(f.t*1.5)*1.6;
+        f.y += f.vy*2.8;
+        f.el.style.left = (f.x)+'px';
+        f.el.style.top  = (f.y)+'px';
+        if(f.y > H+60){ f.el.remove(); FLOATS.splice(i,1); }
+      }
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    // ====== leaderboard ======
+    function renderLB(list){
+      lbEl.innerHTML = '';
+      list.forEach((it, idx) => {
+        const row = document.createElement('div');
+        row.className = 'lb-item';
+        row.innerHTML = `
+          <div class="rank">${idx+1}</div>
+          <div class="uid">${escapeHtml(it.userId || 'anon')}</div>
+          <div class="score">${Number(it.score||0).toLocaleString()}</div>
+        `;
+        lbEl.appendChild(row);
       });
     }
-  }
-  function coinRain(n=60){
-    for(let i=0;i<n;i++){
-      P.push({ x: fx.width*(0.55+Math.random()*0.4), y: -10-Math.random()*200,
-        vx: (Math.random()-0.5)*2, vy: 2+Math.random()*3, r: 3+Math.random()*3, life: 1.2, kind:'coin' });
-    }
-  }
-  function stepFx(ts){
-    g.clearRect(0,0,fx.width,fx.height);
-    for(let i=P.length-1;i>=0;i--){
-      const p=P[i];
-      p.vy += 0.08;
-      p.x += p.vx; p.y += p.vy;
-      p.life -= 0.008;
-      if(p.life<=0 || p.y>fx.height+20){ P.splice(i,1); continue; }
-      g.beginPath();
-      g.arc(p.x,p.y,p.r,0,Math.PI*2);
-      if(p.kind==='coin'){ g.fillStyle = '#ffd166'; g.strokeStyle = '#b68b27'; g.lineWidth = 1; g.fill(); g.stroke(); }
-      else { g.fillStyle = 'rgba(255,255,255,0.9)'; g.fill(); }
-    }
-    // floating texts
-    for(let i=FLOATS.length-1;i>=0;i--){
-      const f = FLOATS[i];
-      f.el.style.transform = `translate(${f.x}px, ${f.y}px)`;
-      f.y -= 0.5; f.t += 1/60;
-      if(f.t>2){ f.el.remove(); FLOATS.splice(i,1); }
-    }
-    requestAnimationFrame(stepFx);
-  }
-  requestAnimationFrame(stepFx);
 
-  function floatText(x,y,html,cls=''){
-    const el = document.createElement('div');
-    el.className = 'floating ' + cls;
-    el.style.left = '0'; el.style.top = '0';
-    el.style.transform = `translate(${x}px, ${y}px)`;
-    el.innerHTML = html;
-    document.body.appendChild(el);
-    FLOATS.push({el, x, y, t:0});
-  }
+    // ====== socket & data ======
+    const socket = io('/overlay', { transports:['websocket'], timeout: 8000, reconnection: true, reconnectionDelay: 800, reconnectionDelayMax: 4000 });
+    socket.on('connect', ()=>{ connStatus.textContent='connected'; connStatus.style.color = 'var(--good)'; });
+    socket.on('disconnect', ()=>{ connStatus.textContent='disconnected'; connStatus.style.color = 'var(--hot)'; });
+    socket.on('connect_error', (e)=>{ connStatus.textContent='error'; connStatus.style.color = 'var(--hot)'; });
 
-  // ====== slot animation ======
-  function spinSlot(score){
-    const cells = [...reel.children];
-    const t0 = Date.now();
-    const dur = 900;
-    const id = setInterval(()=>{
-      cells.forEach(c => c.textContent = EMOJIS[(Math.random()*EMOJIS.length)|0]);
-      if(Date.now()-t0 > dur) { clearInterval(id); cells.forEach((c,i)=> c.textContent = ['💎','💎','💎'][i] ); }
-    }, 60);
+    // hello ping
+    socket.on('hello', (p)=> log(`hello: ${new Date(p.ts).toLocaleTimeString()}`));
 
-    // burst
-    spawnBurst(window.innerWidth*0.5, window.innerHeight*0.42, Math.min(120, 40+score/5));
-  }
+    // leaderboard push
+    socket.on('leaderboard:update', (top10)=> renderLB(top10 || []));
 
-  // ====== Leaderboard ======
-  async function refreshLB(){
-    try{
-      const res = await fetch('/overlay/state');
-      const data = await res.json();
-      lb.innerHTML = (data.top10||[]).map((e,i)=>(
-        `<div class="lb-row"><div class="rank">${i+1}</div>`+
-        `<div class="name">${esc(e.name||e.user||e[0]||'-')}</div>`+
-        `<div class="score">${fmt(e.score||e[1]||0)}</div></div>`
-      )).join('') || `<div class="lb-row"><div class="name">まだスコアがありません</div></div>`;
-    }catch(e){ console.error(e); }
-  }
-  setInterval(refreshLB, 3000);
-  refreshLB();
+    // main event
+    socket.on('play:event', async (payload)=>{
+      try{
+        // payload = { userId, dropped, fallen, bonus, jpDelta, score }
+        const { userId, fallen=0, bonus=0, jpDelta=0, score=0 } = payload || {};
+        onComboHit();
+        addJackpot((jpDelta||0) + (score||0));
 
-  // ====== Toast ======
-  function showToast(text){
-    toast.textContent = text;
-    toast.classList.add('show');
-    setTimeout(()=>toast.classList.remove('show'), 1200);
-  }
+        // spin + burst
+        await spinSlot(fallen >= 3 || bonus > 0 ? '💎' : '⭐');
+        const r = stage.getBoundingClientRect();
+        spawnBurst(r.left + r.width*0.5, r.top + r.height*0.45, 24);
 
-  // ====== play:event 受信 ======
-  const originWs = window.location.origin.replace(/^http/,'ws');
-  const socket = io(`${originWs}/overlay`, { transports:['websocket'] });
+        // coin rain proportional to fallen
+        coinRain(clamp(8 + Math.floor(fallen*1.2) + (bonus>0?12:0), 8, 60));
 
-  socket.on('hello', ()=> console.log('hello from server'));
+        // side log
+        const line = `+${(score||0)}  ${userId || 'anon'}  (fallen:${fallen}, bonus:${bonus}, jp:+${jpDelta||0})`;
+        log(line);
+      }catch(e){
+        console.error(e);
+      }
+    });
 
-  socket.on('play:event', (evt)=>{
-    const now = Date.now();
-    // combo（2秒以内の連打で伸びる）
-    combo = (now - lastPlayAt < 2000) ? Math.min(20, combo+1) : 1;
-    lastPlayAt = now;
-    comboEl.textContent = combo;
+    // initial fetch
+    fetch('/overlay/state').then(r=>r.json()).then(d=> renderLB(d.top10 || [])).catch(()=>{ /* ignore */ });
 
-    const user = evt?.userId || 'user';
-    const baseScore = Math.max(10, Math.floor(evt?.result?.score || 0));
-    const score = Math.floor(baseScore * (1 + (combo-1)*0.08));
-    const medals = Math.max(5, Math.floor(evt?.medals || 10));
-    lastUser.textContent = user;
-    lastScore.textContent = fmt(score);
-    medalsEl.textContent = fmt(medals);
-
-    // 見た目の演出
-    showToast(`+${fmt(score)} pt`);
-    spinSlot(score);
-    coinRain(Math.min(120, medals*2));
-    floatText(window.innerWidth*0.5-40, window.innerHeight*0.24, `+${fmt(score)} pt`, '');
-
-    // ジャックポットメーター（疑似：貯まって100%で花火）
-    const add = Math.min(0.15, medals/500); // ギフト強度で上昇
-    setMeter(Math.min(1, jackpot + add));
-    if(jackpot >= 0.999){
-      // 大爆発
-      for(let i=0;i<10;i++) spawnBurst(window.innerWidth*0.5, window.innerHeight*0.42, 80, 'spark');
-      setMeter(0); // リセット
-      floatText(window.innerWidth*0.5-80, window.innerHeight*0.2, '🎉 JACKPOT! 🎉', '');
+    function log(s){
+      const lines = (logEl.textContent || '').split('\n').filter(Boolean).slice(-18);
+      lines.push(s);
+      logEl.textContent = lines.join('\n');
     }
 
-    // ランキング更新も呼んでおく
-    refreshLB();
-  });
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+    }
 
-  // 初期メーター（疑似で0%）
-  setMeter(0);
-})();
-</script>
+    // optional: keep JP meter gently decay to create tension
+    setInterval(()=> {
+      jpValue = clamp(jpValue - 0.002, 0, 1);
+      jpFill.style.width = (jpValue*100).toFixed(1) + '%';
+    }, 200);
+  </script>
 </body>
 </html>

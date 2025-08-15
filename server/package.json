@@ -19,7 +19,9 @@
   "devDependencies": {
     "tsx": "^4.15.7",
     "typescript": "^5.6.3",
-    "@types/node": "^20.12.12"
+    "@types/node": "^20.12.12",
+    "@types/pg": "^8.11.6",
+    "@types/seedrandom": "^3.0.8"
   },
   "engines": { "node": ">=18 <23" }
 }

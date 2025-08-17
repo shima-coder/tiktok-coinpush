@@ -73,11 +73,11 @@
   <script src="https://unpkg.com/pixi.js@7.4.0/dist/pixi.min.js" crossorigin="anonymous"></script>
 
   <script>
-  // ===== DOM handles =====
+  // ===== DOM =====
   const $ = (s)=>document.querySelector(s);
   const stageEl = $('#stage'), connStatus = $('#conn-status'), lbEl = $('#lb'), logEl = $('#log'), jpFill = $('#jp-fill'), banner = $('#banner'), comboEl = $('#combo');
-  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
-  function log(s){ const lines=(logEl.textContent||'').split('\n').filter(Boolean).slice(-18); lines.push(s); logEl.textContent = lines.join('\n'); }
+  const clamp=(v,min,max)=>Math.max(min, Math.min(max, v));
+  const log=(s)=>{ const lines=(logEl.textContent||'').split('\n').filter(Boolean).slice(-18); lines.push(s); logEl.textContent = lines.join('\n'); };
 
   // ===== Pixi App =====
   const app = new PIXI.Application({ resizeTo: stageEl, backgroundAlpha:0, antialias:true, powerPreference:'high-performance' });
@@ -99,7 +99,7 @@
   drawBG();
   app.ticker.add(()=>{ for (const p of bgLayer.children.slice(1)) { p.y -= p.speed; if (p.y < -10) p.y = app.renderer.height + 10; }});
 
-  // ===== Symbols (text textures) =====
+  // ===== Symbols (emoji textures) =====
   const SYMBOLS = [{ch:'🪙',c:0xffd54a},{ch:'⭐',c:0xfff9a6},{ch:'🎁',c:0xff7fb0},{ch:'🔥',c:0xff694a},{ch:'💎',c:0x7fd4ff},{ch:'🍀',c:0x6aff92}];
   function makeSymbolTexture(ch, color){
     const c = new PIXI.Container();
@@ -114,17 +114,13 @@
   }
   const textures = {}; for (const s of SYMBOLS) textures[s.ch] = makeSymbolTexture(s.ch, s.c);
 
-  // ===== Slot geometry (portrait tuned) =====
-  const REEL_W = 240, REEL_H = 240;   // base cell size
+  // ===== Geometry (portrait tuned) =====
+  const REEL_W = 240, REEL_H = 240;   // 1セル基準
   const GAP = 14;
-
-  // target size ratios (within stage)
-  const SLOT_TARGET_W_RATIO = 0.90;
-  const SLOT_TARGET_H_RATIO = 0.42;
-  const SLOT_SCALE_MIN = 0.55;
-  const SLOT_SCALE_MAX = 1.60;
-  const SLOT_W_ABS_MAX = 720;
-  const SLOT_H_ABS_MAX = 420;
+  const SLOT_TARGET_W_RATIO = 0.90;   // 幅の占有率
+  const SLOT_TARGET_H_RATIO = 0.42;   // 高さの占有率
+  const SLOT_SCALE_MIN = 0.55, SLOT_SCALE_MAX = 1.60;
+  const SLOT_W_ABS_MAX = 720, SLOT_H_ABS_MAX = 420;
 
   const reelMask = new PIXI.Graphics(); const reels = [];
   function layoutReels(){
@@ -162,9 +158,8 @@
     reels.length = 0;
     for (let i=0;i<3;i++){
       const rc = new PIXI.Container(); rc.x = i*(REEL_W+GAP); rc.y=0; view.addChild(rc);
-      // use duplicated order for long loop
-      const order = [...SYMBOLS.map(s=>s.ch), ...SYMBOLS.map(s=>s.ch)];
-      let y = -REEL_H*order.length*0.5; // spread around 0
+      const order = [...SYMBOLS.map(s=>s.ch), ...SYMBOLS.map(s=>s.ch)]; // 2周分
+      let y = -REEL_H*order.length*0.5; // [-half, +half)
       for (const ch of order){
         const spr = new PIXI.Sprite(textures[ch]);
         spr.x=(REEL_W - spr.width)/2; spr.y=y; rc.addChild(spr); y += REEL_H;
@@ -181,10 +176,9 @@
   layoutReels();
   app.renderer.on('resize', layoutReels);
 
-  // ===== Spin control (fixed wrapping & snapping) =====
-  function randChoice(arr){ return arr[(Math.random()*arr.length)|0]; }
+  // ===== Spin control (wrap/snap fixed) =====
+  const randChoice=arr=>arr[(Math.random()*arr.length)|0];
 
-  // 正しいラップ：列の実長さで wrap（穴防止）
   function advance(dt){
     for (const r of reels){
       if (!r.spinning) continue;
@@ -192,10 +186,9 @@
       const n = rc.children.length;
       const colH = n * REEL_H;
       const half = colH * 0.5;
-
       for (const spr of rc.children){
         spr.y += r.vy * dt;
-        if (spr.y > half) spr.y -= colH; // 一方向にだけ戻す
+        if (spr.y > half) spr.y -= colH;        // 一方向にラップ
       }
     }
   }
@@ -209,15 +202,13 @@
     return finals;
   }
 
-  // 最上( y≈0 )に近いスプライト＆シンボル番号
   function nearestTop(rc){
     let bestSpr=null, bestDist=1e9, idx=0;
     rc.children.forEach((spr,i)=>{
       const d = Math.abs(spr.y);
       if (d < bestDist){ bestSpr=spr; bestDist=d; idx=i; }
     });
-    const symIdx = idx % SYMBOLS.length;
-    return { spr: bestSpr, symIdx };
+    return { spr: bestSpr, symIdx: idx % SYMBOLS.length };
   }
 
   async function stopReelTo(i,ch){
@@ -234,23 +225,19 @@
         if (t >= 1){
           r.vy = 0; r.spinning = false;
 
-          // 最上に近いスプライトの行に合わせる
           const { spr: topSpr, symIdx: topSymIdx } = nearestTop(r.c);
-
-          // 目的の図柄までの差分（REEL_H単位）だけ全スプライトを移動
           const diff = (targetIdx - topSymIdx + SYMBOLS.length) % SYMBOLS.length;
           const adjust = diff * REEL_H;
           r.c.children.forEach(s => { s.y -= adjust; });
 
-          // top の y を 0 に正確に合わせる（浮動小数誤差の解消）
-          const off = topSpr.y - adjust;
+          const off = topSpr.y - adjust;             // top を y=0 に揃える
           r.c.children.forEach(s => { s.y -= off; });
 
-          // 仕上げに“グリッドへスナップ”（穴の永続化を防止）
-          r.c.children.forEach(s => { s.y = Math.round(s.y / REEL_H) * REEL_H; });
+          r.c.children.forEach(s => {                // グリッドへスナップ（穴永続防止）
+            s.y = Math.round(s.y / REEL_H) * REEL_H;
+          });
 
-          // その場スケールのバウンド（reparentしない）
-          bounceReel(i);
+          bounceReel(i);                              // reparentしない
           return resolve();
         }
         r.vy = startVy * (1 - easeOut(t)) + 2.2;
@@ -261,7 +248,6 @@
     });
   }
 
-  // 親を付け替えないバウンド
   function bounceReel(i){
     const r = reels[i].c;
     const D1 = 80, D2 = 100;
@@ -270,31 +256,67 @@
     function step(){
       const t = performance.now() - t0;
       if (t >= D1 + D2){ r.scale.y = 1; return; }
-      if (t < D1){
-        const p = t / D1; r.scale.y = sy0 + (sy1 - sy0)*p;
-      } else {
-        const p = (t - D1) / D2; r.scale.y = sy1 + (sy0 - sy1)*p;
-      }
+      if (t < D1){ const p = t / D1; r.scale.y = sy0 + (sy1 - sy0)*p; }
+      else { const p = (t - D1) / D2; r.scale.y = sy1 + (sy0 - sy1)*p; }
       requestAnimationFrame(step);
     }
     step();
   }
 
   // ===== FX =====
-  function sparkleBurst(x,y,n=24,color=0x66ccff){ for (let i=0;i<n;i++){ const dot=new PIXI.Graphics(); dot.beginFill(0xffffff).drawCircle(0,0,Math.random()*1.8+0.7).endFill(); const spr=new PIXI.Sprite(app.renderer.generateTexture(dot)); spr.x=x; spr.y=y; spr.tint=color; spr.alpha=.9; spr.blendMode=PIXI.BLEND_MODES.ADD; spr.vx=(Math.random()*2-1)*(3+Math.random()*3); spr.vy=(Math.random()*2-1)*(3+Math.random()*3); spr.vr=(Math.random()*2-1)*.12; spr.life=36+(Math.random()*12|0); fxLayer.addChild(spr); } }
-  function coinRain(count=30){ const {width:W}=app.renderer; for (let i=0;i<count;i++){ setTimeout(()=>{ const t=new PIXI.Text('🪙',{fontSize:32}); t.x=Math.random()*W; t.y=-20; t.vy=2+Math.random()*2.5; t.vx=(Math.random()*2-1)*.6; t.blendMode=PIXI.BLEND_MODES.SCREEN; t.alpha=.92; fxLayer.addChild(t); t.update=()=>{ t.x+=t.vx; t.y+=t.vy; t.vy+=.04; if(t.y>app.renderer.height+40){ t.destroy(); } }; }, i*40); } }
-  function screenFlash(ms=260){ const r=new PIXI.Graphics().beginFill(0xffffff,.9).drawRect(0,0,app.renderer.width,app.renderer.height).endFill(); fxLayer.addChild(r); const t0=performance.now(); function step(){ const t=(performance.now()-t0)/ms; if (t>=1){ r.destroy(); return; } r.alpha = .9*(1-t); requestAnimationFrame(step); } step(); }
+  function sparkleBurst(x,y,n=24,color=0x66ccff){
+    for (let i=0;i<n;i++){
+      const dot=new PIXI.Graphics(); dot.beginFill(0xffffff).drawCircle(0,0,Math.random()*1.8+0.7).endFill();
+      const spr=new PIXI.Sprite(app.renderer.generateTexture(dot));
+      spr.x=x; spr.y=y; spr.tint=color; spr.alpha=.9; spr.blendMode=PIXI.BLEND_MODES.ADD;
+      spr.vx=(Math.random()*2-1)*(3+Math.random()*3); spr.vy=(Math.random()*2-1)*(3+Math.random()*3);
+      spr.vr=(Math.random()*2-1)*.12; spr.life=36+(Math.random()*12|0); fxLayer.addChild(spr);
+    }
+  }
+  function coinRain(count=30){
+    const {width:W}=app.renderer;
+    for (let i=0;i<count;i++){
+      setTimeout(()=>{
+        const t=new PIXI.Text('🪙',{fontSize:32});
+        t.x=Math.random()*W; t.y=-20; t.vy=2+Math.random()*2.5; t.vx=(Math.random()*2-1)*.6;
+        t.blendMode=PIXI.BLEND_MODES.SCREEN; t.alpha=.92; fxLayer.addChild(t);
+        t.update=()=>{ t.x+=t.vx; t.y+=t.vy; t.vy+=.04; if(t.y>app.renderer.height+40){ t.destroy(); } };
+      }, i*40);
+    }
+  }
+  function screenFlash(ms=260){
+    const r=new PIXI.Graphics().beginFill(0xffffff,.9).drawRect(0,0,app.renderer.width,app.renderer.height).endFill();
+    fxLayer.addChild(r); const t0=performance.now();
+    (function step(){ const t=(performance.now()-t0)/ms; if (t>=1){ r.destroy(); return; } r.alpha = .9*(1-t); requestAnimationFrame(step); })();
+  }
   app.ticker.add(()=>{ for (const s of fxLayer.children){ if (s.life!==undefined){ s.x+=s.vx; s.y+=s.vy; s.rotation+=s.vr; s.alpha-=.02; s.life--; if (s.life<=0||s.alpha<=0) s.destroy(); } else if (s.update){ s.update(); } } });
 
   // ===== Combo & JP meter =====
-  let jpValue=0; function addJackpot(deltaScore){ jpValue = clamp(jpValue + deltaScore/6000, 0, 1); jpFill.style.width=(jpValue*100).toFixed(1)+'%'; }
+  let jpValue=0; const addJackpot=(deltaScore)=>{ jpValue = clamp(jpValue + deltaScore/6000, 0, 1); jpFill.style.width=(jpValue*100).toFixed(1)+'%'; };
   setInterval(()=>{ jpValue = clamp(jpValue - 0.0025, 0, 1); jpFill.style.width=(jpValue*100).toFixed(1)+'%'; }, 220);
-  let lastHitAt=0, comboMul=1.0; function onComboHit(extend=true){ const t=performance.now(); const dt=(t-lastHitAt)/1000; lastHitAt=t; if (extend && dt<2.5) comboMul=clamp(comboMul+0.25,1,5); else if(!extend) comboMul=1.0; comboEl.querySelector('.x').textContent='x'+comboMul.toFixed(1); comboEl.animate([{transform:'scale(1.0)'},{transform:'scale(1.12)'},{transform:'scale(1.0)'}],{duration:260, easing:'ease-out'}); }
-  function showBanner(text,color){ banner.textContent=text; banner.style.color=color||'#fff'; banner.style.display='block'; banner.animate([{opacity:0, transform:'translate(-50%,-6px)'},{opacity:1, transform:'translate(-50%,0)'}],{duration:220,easing:'ease-out'}); setTimeout(()=>banner.style.display='none', 900); }
+  let lastHitAt=0, comboMul=1.0;
+  function onComboHit(extend=true){
+    const t=performance.now(); const dt=(t-lastHitAt)/1000; lastHitAt=t;
+    if (extend && dt<2.5) comboMul=clamp(comboMul+0.25,1,5); else if(!extend) comboMul=1.0;
+    comboEl.querySelector('.x').textContent='x'+comboMul.toFixed(1);
+    comboEl.animate([{transform:'scale(1.0)'},{transform:'scale(1.12)'},{transform:'scale(1.0)'}],{duration:260, easing:'ease-out'});
+  }
+  function showBanner(text,color){
+    banner.textContent=text; banner.style.color=color||'#fff'; banner.style.display='block';
+    banner.animate([{opacity:0, transform:'translate(-50%,-6px)'},{opacity:1, transform:'translate(-50%,0)'}],{duration:220,easing:'ease-out'});
+    setTimeout(()=>banner.style.display='none', 900);
+  }
 
   // ===== Leaderboard =====
-  function renderLB(list){ lbEl.innerHTML=''; (list||[]).forEach((it,idx)=>{ const row=document.createElement('div'); row.className='lb-item'; row.innerHTML=`<div class="rank">${idx+1}</div><div class="uid">${escapeHtml(it.userId||'anon')}</div><div class="score">${Number(it.score||0).toLocaleString()}</div>`; lbEl.appendChild(row); }); }
-  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;' }[m])); }
+  function renderLB(list){
+    lbEl.innerHTML='';
+    (list||[]).forEach((it,idx)=>{
+      const row=document.createElement('div'); row.className='lb-item';
+      row.innerHTML=`<div class="rank">${idx+1}</div><div class="uid">${escapeHtml(it.userId||'anon')}</div><div class="score">${Number(it.score||0).toLocaleString()}</div>`;
+      lbEl.appendChild(row);
+    });
+  }
+  const escapeHtml=(s)=>String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;' }[m]));
 
   // ===== Socket =====
   const socket = io('/overlay', { transports:['websocket'], timeout:8000, reconnection:true, reconnectionDelay:800, reconnectionDelayMax:4000 });
@@ -311,13 +333,37 @@
     MEGA:   { stop:'💎',  burst:36, rain:56, banner:'MEGA HIT!', color:'#ff4d67' },
   };
 
-  socket.on('play:event', async (payload)=>{
+  // === 直列実行キュー（並走防止 & ペース制御） ===
+  const sleep = (ms)=>new Promise(r=>setTimeout(r, ms));
+  const eventQueue = [];
+  let draining = false;
+  const PACE_MS = 180; // 重ければ 220–260 に
+
+  function enqueue(kind, payload){
+    // ボーナスは「今の次」に割り込み（同時発生を素早く出す）
+    if (kind === 'bonus' && eventQueue.length >= 1) eventQueue.splice(1, 0, { kind, payload });
+    else eventQueue.push({ kind, payload });
+    if (!draining) drainQueue();
+  }
+
+  async function drainQueue(){
+    draining = true;
+    while (eventQueue.length){
+      const job = eventQueue.shift();
+      if (job.kind === 'event')      await handlePlayEvent(job.payload);
+      else if (job.kind === 'bonus') await handleBonus(job.payload);
+      await sleep(PACE_MS); // 次の回転まで間を置く
+    }
+    draining = false;
+  }
+
+  async function handlePlayEvent(payload){
     try{
       if (payload && payload.spin) {
         const { tier, symbols, multiplier, bonusGame, comboExtend } = payload.spin;
         onComboHit(comboExtend!==false);
         addJackpot((payload.jpDelta||0) + (payload.score||0));
-        const finals = await spinReels(Array.isArray(symbols)&&symbols.length===3 ? symbols : null);
+        await spinReels(Array.isArray(symbols)&&symbols.length===3 ? symbols : null);
         const cx=app.renderer.width/2, cy=app.renderer.height/2;
         sparkleBurst(cx, cy-10, TIER[tier]?.burst ?? 18, (TIER[tier]?.color ? PIXI.utils.string2hex(TIER[tier].color) : 0x66ccff));
         coinRain(TIER[tier]?.rain ?? 20);
@@ -326,7 +372,7 @@
         log(`+${(payload.score||0)}  ${payload.userId||'anon'}  [${tier}] x${(multiplier||1).toFixed(2)}  jp:+${payload.jpDelta||0}`);
         return;
       }
-      // fallback（旧形式）
+      // 旧形式フォールバック
       const { userId, fallen=0, bonus=0, jpDelta=0, score=0 } = payload || {};
       onComboHit(true); addJackpot((jpDelta||0) + (score||0));
       await spinReels(fallen >= 3 || bonus > 0 ? ['💎','💎','💎'] : null);
@@ -335,19 +381,24 @@
       showBanner((fallen>=3||bonus>0)?'HIT!':'TRY AGAIN', (fallen>=3||bonus>0)?'#00e5a8':'#9aa7bd');
       log(`+${(score||0)}  ${userId || 'anon'}  (fallen:${fallen}, bonus:${bonus}, jp:+${jpDelta||0})`);
     }catch(e){ console.error(e); }
-  });
+  }
 
-  // Global bonus
-  socket.on('play:bonus', async (p)=>{
+  async function handleBonus(p){
     try{
       const r = app.renderer, cx=r.width/2, cy=r.height/2;
       screenFlash(320);
-      await spinReels(['💎','💎','💎']);
-      coinRain(120); sparkleBurst(cx, cy-12, 72, 0xffe066);
+      await spinReels(['💎','💎','💎']);      // 確定演出
+      const backlog = eventQueue.length;     // キューに応じて軽量化
+      coinRain(backlog > 5 ? 80 : 120);
+      sparkleBurst(cx, cy-12, backlog > 5 ? 48 : 72, 0xffe066);
       showBanner(`GLOBAL BONUS +${p?.bonusScore||100} (by ${p?.userId||'anon'})`, '#ffcb4d');
       log(`🌟 GLOBAL BONUS +${p?.bonusScore||100} triggered by ${p?.userId||'anon'} (threshold ${p?.threshold||10}, remain ${p?.remain ?? 0})`);
     }catch(e){ console.error(e); }
-  });
+  }
+
+  // ソケット受信 → 必ずキュー投入（並走禁止）
+  socket.on('play:event', (payload)=> enqueue('event', payload));
+  socket.on('play:bonus', (p)=> enqueue('bonus', p));
 
   // 初回：ランキング
   fetch('/overlay/state').then(r=>r.json()).then(d=> renderLB(d.top10 || [])).catch(()=>{});

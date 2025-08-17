@@ -12,7 +12,7 @@ import { spin } from './slot.js';
 // 依存注入用コンテキスト
 type Ctx = { redis: Redis | null; db: Pool | null; io: Server };
 
-/** ===== 互換のポイント系（使ってなくても残す） ===== */
+/** ===== 互換のポイント系（必要なら活用） ===== */
 const POINTS_INITIAL = Number(process.env.POINTS_INITIAL ?? 2000);
 const POINTS_COST_PER_SPIN = Number(process.env.POINTS_COST_PER_SPIN ?? 100);
 const POINTS_PER_YEN = Number(process.env.POINTS_PER_YEN ?? 1);
@@ -46,10 +46,10 @@ async function addPoints(redis: Redis, userId: string, amount: number): Promise<
   return after;
 }
 
-/** ===== 新：全体カウント・ボーナス（原子化） ===== */
-const GLOBAL_BONUS_THRESHOLD = Number(process.env.GLOBAL_BONUS_THRESHOLD ?? 10); // 10回ごと
-const GLOBAL_BONUS_SCORE     = Number(process.env.GLOBAL_BONUS_SCORE ?? 100);    // +100
-const GLOBAL_COUNT_KEY       = 'glob:act_count';
+/** ===== 全体カウント・ボーナス（原子化 Lua） ===== */
+const GLOBAL_COUNT_KEY = 'glob:act_count';
+const DEFAULT_THRESHOLD = Number(process.env.GLOBAL_BONUS_THRESHOLD ?? 10); // 10回ごと
+const DEFAULT_BONUS_SCORE = Number(process.env.GLOBAL_BONUS_SCORE ?? 100);  // +100
 
 // INCR → しきい値判定 → 残カウント計算 を原子化
 // 戻り: { after, remain, triggered }
@@ -74,6 +74,55 @@ const ACTION_MEDALS = {
 // ギフト以外でもJPを少し進めると楽しい
 const JP_ADD_PER_ACTION = Number(process.env.JP_ADD_PER_ACTION ?? 2);
 
+/** ===== リモート設定（Redis） ===== */
+type LiveConfig = {
+  threshold: number;    // ボーナスしきい値
+  bonusScore: number;   // ボーナス加点
+  paceMs: number;       // 連続回転の間隔（ms）…フロント側へ通知
+  fxLevel: number;      // 演出強度（0.3〜1.5）…フロント側へ通知
+};
+const CONFIG_KEY = 'overlay:config';
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+
+const defaultConfig: LiveConfig = {
+  threshold: DEFAULT_THRESHOLD,
+  bonusScore: DEFAULT_BONUS_SCORE,
+  paceMs: 180,
+  fxLevel: 1.0,
+};
+
+async function getConfig(redis: Redis | null): Promise<LiveConfig> {
+  if (!redis) return { ...defaultConfig };
+  const raw = await redis.get(CONFIG_KEY);
+  if (!raw) return { ...defaultConfig };
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      threshold: Number(parsed.threshold ?? defaultConfig.threshold),
+      bonusScore: Number(parsed.bonusScore ?? defaultConfig.bonusScore),
+      paceMs: Number(parsed.paceMs ?? defaultConfig.paceMs),
+      fxLevel: Number(parsed.fxLevel ?? defaultConfig.fxLevel),
+    };
+  } catch {
+    return { ...defaultConfig };
+  }
+}
+async function setConfig(redis: Redis, patch: Partial<LiveConfig>): Promise<LiveConfig> {
+  const cur = await getConfig(redis);
+  const next: LiveConfig = {
+    threshold: Math.max(1, Math.floor(Number(patch.threshold ?? cur.threshold))),
+    bonusScore: Math.max(0, Math.floor(Number(patch.bonusScore ?? cur.bonusScore))),
+    paceMs: Math.max(80, Math.min(800, Math.floor(Number(patch.paceMs ?? cur.paceMs)))),
+    fxLevel: Math.max(0.3, Math.min(1.5, Number(patch.fxLevel ?? cur.fxLevel))),
+  };
+  await redis.set(CONFIG_KEY, JSON.stringify(next));
+  return next;
+}
+function requireAdmin(req: any) {
+  const t = req.headers['x-admin-token'] || req.query?.token;
+  return ADMIN_TOKEN && String(t) === ADMIN_TOKEN;
+}
+
 export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
   const { redis, io } = ctx;
 
@@ -87,41 +136,51 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
     return { top10 };
   });
 
-  // ★ 追加：ボーナス進捗の取得（リロード直後の初期化用）
+  // 進捗の取得（リロード直後など）
   app.get('/bonus/state', async () => {
-    if (!redis) return { threshold: GLOBAL_BONUS_THRESHOLD, remain: 0, after: 0 };
+    if (!redis) return { threshold: defaultConfig.threshold, remain: 0, after: 0 };
+    const conf = await getConfig(redis);
     const after = Number(await (redis as any).get(GLOBAL_COUNT_KEY) || 0);
-    let remain = GLOBAL_BONUS_THRESHOLD - (after % GLOBAL_BONUS_THRESHOLD);
-    if (remain === GLOBAL_BONUS_THRESHOLD) remain = 0;
-    return { threshold: GLOBAL_BONUS_THRESHOLD, remain, after };
+    let remain = conf.threshold - (after % conf.threshold);
+    if (remain === conf.threshold) remain = 0;
+    return { threshold: conf.threshold, remain, after };
   });
 
-  // ===== 既存：ギフト由来の演出（そのまま） =====
+  // ===== 静的ファイル（assets）配信 =====
+  app.get('/assets/*', async (req, reply) => {
+    try {
+      const wildcard = (req.params as any)['*'] as string;
+      const abs = path.resolve(process.cwd(), 'dist/assets', wildcard || '');
+      const data = await readFile(abs);
+      const ext = path.extname(abs).toLowerCase();
+      const mime: Record<string,string> = {
+        '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg',
+        '.webp':'image/webp', '.svg':'image/svg+xml', '.json':'application/json'
+      };
+      reply.type(mime[ext] ?? 'application/octet-stream').send(data);
+    } catch {
+      reply.code(404).send({ ok:false, error:'asset_not_found' });
+    }
+  });
+
+  // ===== ギフト由来の演出 =====
   app.post('/ingest/gift', async (req, reply) => {
     try {
       const body: any = (req as any).body || {};
       const userId = String(body.userId || 'anon');
       const amountYen = Number(body.amountYen || 100);
 
-      const coins = Math.floor(
-        amountYen * (Number(process.env.COINS_PER_100YEN || 100) / 100)
-      );
-      const medals = Math.floor(
-        coins * (Number(process.env.MEDALS_PER_100_COINS || 5) / 100)
-      );
+      const coins = Math.floor(amountYen * (Number(process.env.COINS_PER_100YEN || 100) / 100));
+      const medals = Math.floor(coins * (Number(process.env.MEDALS_PER_100_COINS || 5) / 100));
 
       const seed = randomUUID();
       const jpPool = redis ? Number((await (redis as any).get('jp_pool')) || 0) : 0;
       const phys = simulate(seed, medals, jpPool);
-
       const spinRes = spin();
       const finalScore = Math.max(0, Math.floor(phys.score * (spinRes.multiplier || 1)));
 
       if (redis) {
-        await (redis as any).incrby(
-          'jp_pool',
-          Math.floor(amountYen * Number(process.env.JP_POOL_PCT || 0.02))
-        );
+        await (redis as any).incrby('jp_pool', Math.floor(amountYen * Number(process.env.JP_POOL_PCT || 0.02)));
         await addScore(redis as any, userId, finalScore);
       } else {
         app.log.warn('REDIS_URL 未設定のためスコアは保存されません');
@@ -129,12 +188,8 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
 
       const payload = {
         userId,
-        dropped: phys.dropped,
-        fallen: phys.fallen,
-        bonus: phys.bonus,
-        jpDelta: phys.jpDelta,
-        score: finalScore,
-        spin: spinRes,
+        dropped: phys.dropped, fallen: phys.fallen, bonus: phys.bonus,
+        jpDelta: phys.jpDelta, score: finalScore, spin: spinRes,
         source: 'gift' as const,
       };
 
@@ -146,7 +201,7 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
     }
   });
 
-  // ===== 新：ライブ行動で回す + 全体カウント（原子化） =====
+  // ===== ライブ行動で回す + 全体カウント（Lua原子） =====
   app.post('/ingest/action', async (req, reply) => {
     try {
       const body: any = (req as any).body || {};
@@ -156,15 +211,10 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
 
       // メダル換算
       let medals = 1;
-      if (action === 'gift') {
-        medals = Math.max(1, Math.floor(amountYen * ACTION_MEDALS.giftPerYen));
-      } else if (action === 'like') {
-        medals = ACTION_MEDALS.like;
-      } else if (action === 'follow') {
-        medals = ACTION_MEDALS.follow;
-      } else {
-        medals = ACTION_MEDALS.comment;
-      }
+      if (action === 'gift')      medals = Math.max(1, Math.floor(amountYen * ACTION_MEDALS.giftPerYen));
+      else if (action === 'like') medals = ACTION_MEDALS.like;
+      else if (action === 'follow') medals = ACTION_MEDALS.follow;
+      else                        medals = ACTION_MEDALS.comment;
 
       // 通常スロット
       const seed = randomUUID();
@@ -182,50 +232,38 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
         await addScore(redis as any, userId, finalScore);
       }
 
-      const payload = {
+      const eventPayload = {
         userId, action,
-        dropped: phys.dropped,
-        fallen: phys.fallen,
-        bonus: phys.bonus,
-        jpDelta: phys.jpDelta,
-        score: finalScore,
-        spin: spinRes,
+        dropped: phys.dropped, fallen: phys.fallen, bonus: phys.bonus,
+        jpDelta: phys.jpDelta, score: finalScore, spin: spinRes,
         source: 'action' as const,
       };
-      io.of('/overlay').emit('play:event', payload);
+      io.of('/overlay').emit('play:event', eventPayload);
 
-      // 全体カウント原子化 INCR（remain/triggered を返す）
+      // 原子 INCR + 進捗/発火
       let after = 0, remain = 0, triggered = 0;
       if (redis) {
-        const res: any = await (redis as any).eval(LUA_BONUS_INCR, 1, GLOBAL_COUNT_KEY, String(GLOBAL_BONUS_THRESHOLD));
+        const conf = await getConfig(redis);
+        const res: any = await (redis as any).eval(LUA_BONUS_INCR, 1, GLOBAL_COUNT_KEY, String(conf.threshold));
         after = Number(res?.[0] ?? 0);
         remain = Number(res?.[1] ?? 0);
         triggered = Number(res?.[2] ?? 0);
 
-        // 進捗イベント（全クライアントへ）
-        io.of('/overlay').emit('bonus:progress', {
-          threshold: GLOBAL_BONUS_THRESHOLD,
-          after, remain
-        });
+        // 進捗イベント
+        io.of('/overlay').emit('bonus:progress', { threshold: conf.threshold, after, remain });
 
         if (triggered === 1) {
-          // 達成者に +100
-          await addScore(redis as any, userId, GLOBAL_BONUS_SCORE);
-          // ボーナス演出
+          await addScore(redis as any, userId, conf.bonusScore);
           io.of('/overlay').emit('play:bonus', {
-            kind: 'global',
-            userId,
-            action,
-            threshold: GLOBAL_BONUS_THRESHOLD,
-            bonusScore: GLOBAL_BONUS_SCORE,
-            remain: 0
+            kind: 'global', userId, action,
+            threshold: conf.threshold, bonusScore: conf.bonusScore, remain: 0
           });
         }
       } else {
         app.log.warn('REDIS_URL 未設定のため、全体カウントは無効です');
       }
 
-      return reply.send({ ok: true, result: payload, after, remain, bonusTriggered: triggered === 1 });
+      return reply.send({ ok: true, result: eventPayload, after, remain, bonusTriggered: triggered === 1 });
     } catch (e: any) {
       app.log.error(e);
       return reply.code(500).send({ ok: false, error: String(e?.message || e) });
@@ -268,12 +306,8 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
 
       const payload = {
         userId,
-        dropped: phys.dropped,
-        fallen: phys.fallen,
-        bonus: phys.bonus,
-        jpDelta: phys.jpDelta,
-        score: finalScore,
-        spin: spinRes,
+        dropped: phys.dropped, fallen: phys.fallen, bonus: phys.bonus,
+        jpDelta: phys.jpDelta, score: finalScore, spin: spinRes,
         source: 'points' as const,
       };
       io.of('/overlay').emit('play:event', payload);
@@ -317,6 +351,52 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
     }
   });
 
+  // ===== Admin: 設定の取得・更新・ボーナス強制 =====
+  app.get('/admin/config', async (req, reply) => {
+    if (!requireAdmin(req)) return reply.code(403).send({ ok:false, error:'forbidden' });
+    const conf = await getConfig(redis!);
+    return reply.send({ ok:true, config: conf });
+  });
+
+  app.post('/admin/config', async (req, reply) => {
+    if (!requireAdmin(req)) return reply.code(403).send({ ok:false, error:'forbidden' });
+    try {
+      const body: Partial<LiveConfig> = (req as any).body || {};
+      const next = await setConfig(redis!, body);
+      // クライアントへ即時通知
+      ctx.io.of('/overlay').emit('config:update', next);
+
+      // 進捗も再計算して通知（メーターずれ防止）
+      const after = Number(await (redis as any).get(GLOBAL_COUNT_KEY) || 0);
+      let remain = next.threshold - (after % next.threshold);
+      if (remain === next.threshold) remain = 0;
+      ctx.io.of('/overlay').emit('bonus:progress', { threshold: next.threshold, after, remain });
+
+      return reply.send({ ok:true, config: next });
+    } catch (e:any) {
+      app.log.error(e);
+      return reply.code(500).send({ ok:false, error: String(e?.message || e) });
+    }
+  });
+
+  app.post('/admin/bonus/trigger', async (req, reply) => {
+    if (!requireAdmin(req)) return reply.code(403).send({ ok:false, error:'forbidden' });
+    try {
+      const conf = await getConfig(redis!);
+      const body:any = (req as any).body || {};
+      const actor = String(body.userId || 'admin');
+      if (redis) await addScore(redis as any, actor, conf.bonusScore);
+      ctx.io.of('/overlay').emit('play:bonus', {
+        kind:'admin', userId: actor, action:'admin',
+        threshold: conf.threshold, bonusScore: conf.bonusScore, remain: 0
+      });
+      return reply.send({ ok:true });
+    } catch (e:any) {
+      app.log.error(e);
+      return reply.code(500).send({ ok:false, error: String(e?.message || e) });
+    }
+  });
+
   // ===== overlay.html 静的配信 =====
   app.get('/overlay.html', async (_req, reply) => {
     try {
@@ -324,7 +404,7 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
       const html = await readFile(p, 'utf-8');
       reply.type('text/html').send(html);
     } catch (e) {
-      app.log.error(e);
+      ctx.io.sockets.emit('log', { level:'error', msg:'overlay.html not found' });
       reply.code(404).send({ error: 'overlay.html not found' });
     }
   });

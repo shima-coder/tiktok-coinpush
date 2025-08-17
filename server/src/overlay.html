@@ -16,8 +16,8 @@
     .phone{
       width:min(100vw,56.25vh); height:min(177.78vw,100vh); aspect-ratio:9/16;
       border:1px solid var(--line); border-radius:20px;
-      background: linear-gradient(180deg,#070b12,#05060a);
-      overflow:hidden; display:grid; grid-template-rows:auto auto 1fr auto auto; gap:10px; padding:10px; /* ← 進捗バーを1段追加 */
+      background: linear-gradient(180deg,#070b12,#05080e);
+      overflow:hidden; display:grid; grid-template-rows:auto auto 1fr auto auto; gap:10px; padding:10px;
     }
     .bar{display:grid; gap:8px; grid-template-columns:1fr auto; align-items:center; padding:10px 12px; border:1px solid var(--line); border-radius:14px; background:linear-gradient(180deg,#0b1120,#090e18); box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
     .title{font-weight:800; letter-spacing:.4px; font-size:14px}
@@ -25,11 +25,9 @@
     .meter{position:relative; height:12px; border-radius:999px; background:#0a0f18; border:1px solid #182032; overflow:hidden}
     .meter .fill{position:absolute; inset:0; width:0%; background:linear-gradient(90deg,#1240ff,#4dd4ff,#00e5a8); filter:brightness(1.15); transition:width .35s cubic-bezier(.2,.8,.2,1)}
     .subbar{display:grid; grid-template-columns:1fr auto; align-items:center; gap:8px; padding:6px 10px; border:1px solid var(--line); border-radius:12px; background:linear-gradient(180deg,#0b1018,#090e18);}
-
     .stage{position:relative; border:1px solid var(--line); border-radius:16px; overflow:hidden;
       background: radial-gradient(60% 30% at 50% 10%, rgba(16,24,48,.6), transparent 70%), radial-gradient(90% 80% at 50% 100%, #05080f, #05060a 60%);}
     .stage::after{content:""; position:absolute; inset:-20% -10% auto -10%; height:60%; background: conic-gradient(from 180deg at 50% 0%, rgba(255,255,255,.045), rgba(255,255,255,0) 30%, rgba(255,255,255,.045) 60%, rgba(255,255,255,0)); mix-blend-mode: overlay; pointer-events:none; filter: blur(18px);}
-
     .panel{background:linear-gradient(180deg,#0b1018,#080c12); border:1px solid #172235; border-radius:14px; padding:10px}
     .panel h3{margin:0 0 6px 0; font-size:14px}
     .lb-item{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 8px; border-radius:10px}
@@ -38,9 +36,8 @@
     .uid{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px}
     .score{font-weight:700; color:#e8eef7; font-size:12px}
     .log{font-size:11px; color:#aab3c2; white-space:pre-line; max-height:18vh; overflow:auto}
-
     .combo{position:absolute; right:10px; top:10px; background:rgba(0,0,0,.35); border:1px solid #1b2436; border-radius:12px; padding:6px 10px; font-weight:800; font-size:13px; z-index:3}
-    .combo .x{color:var(--hot)}
+    .combo .x{color:#ff4d67}
     .banner{position:absolute; left:50%; top:6%; transform:translateX(-50%); padding:8px 14px; border-radius:12px; background:rgba(0,0,0,.5); border:1px solid #1b2333; font-weight:900; box-shadow:0 8px 30px rgba(0,0,0,.4); font-size:14px; z-index:3; display:none}
   </style>
 </head>
@@ -116,18 +113,23 @@
   drawBG();
   app.ticker.add(()=>{ for (const p of bgLayer.children.slice(1)) { p.y -= p.speed; if (p.y < -10) p.y = app.renderer.height + 10; }});
 
-  // ===== Symbols（将来: atlas対応のための抽象化） =====
-  const SYMBOLS = [{ch:'🪙',c:0xffd54a,name:'coin'},{ch:'⭐',c:0xfff9a6,name:'star'},{ch:'🎁',c:0xff7fb0,name:'gift'},{ch:'🔥',c:0xff694a,name:'fire'},{ch:'💎',c:0x7fd4ff,name:'gem'},{ch:'🍀',c:0x6aff92,name:'clover'}];
+  // ===== Symbols（atlas → emoji フォールバック） =====
+  const SYMBOLS = [
+    {ch:'🪙',c:0xffd54a,name:'coin'},
+    {ch:'⭐',c:0xfff9a6,name:'star'},
+    {ch:'🎁',c:0xff7fb0,name:'gift'},
+    {ch:'🔥',c:0xff694a,name:'fire'},
+    {ch:'💎',c:0x7fd4ff,name:'gem'},
+    {ch:'🍀',c:0x6aff92,name:'clover'}
+  ];
 
   let atlas = null;
   const textures = {};
   async function loadAtlasIfAny(){
     try{
-      // ③ の布石：/assets/symbols.json が存在すれば使う（なければ catch へ）
       const res = await fetch('/assets/symbols.json', { cache: 'no-store' });
       if (!res.ok) throw new Error('no atlas');
-      atlas = await res.json(); // 形式: { meta:..., frames:{ 'coin.png':{...}, ... } } 前提
-      // Atlas画像は /assets/symbols.png 想定
+      atlas = await res.json();
       const base = await PIXI.Assets.load('/assets/symbols.png');
       for (const s of SYMBOLS){
         const f = atlas.frames?.[`${s.name}.png`];
@@ -138,11 +140,10 @@
       console.info('atlas loaded');
       return true;
     }catch(e){
-      console.info('atlas not found, fallback to emoji textures');
+      console.info('atlas not found, fallback to emoji');
       return false;
     }
   }
-
   function makeEmojiTexture(ch, color){
     const c = new PIXI.Container();
     const bg = new PIXI.Graphics().beginFill(0x0e1626).drawRoundedRect(0,0,220,220,26).endFill();
@@ -154,20 +155,18 @@
     c.destroy({children:true, texture:true, baseTexture:true});
     return rt;
   }
-
   async function ensureTextures(){
     const ok = await loadAtlasIfAny();
     if (ok) return;
     for (const s of SYMBOLS) textures[s.ch] = makeEmojiTexture(s.ch, s.c);
   }
 
-  // ===== Geometry =====
-  const REEL_W = 240, REEL_H = 240;   // 1セル基準
+  // ===== Geometry（portrait） =====
+  const REEL_W = 240, REEL_H = 240;   // 1セル
   const GAP = 14;
-  const SLOT_TARGET_W_RATIO = 0.90;
-  const SLOT_TARGET_H_RATIO = 0.42;
+  const SLOT_TARGET_W_RATIO = 0.90, SLOT_TARGET_H_RATIO = 0.42;
   const SLOT_SCALE_MIN = 0.55, SLOT_SCALE_MAX = 1.60;
-  const SLOT_W_ABS_MAX = 720, SLOT_H_ABS_MAX = 420;
+  const SLOT_W_ABS_MAX = 720,       SLOT_H_ABS_MAX = 420;
 
   const reelMask = new PIXI.Graphics(); const reels = [];
   function layoutReels(){
@@ -180,12 +179,10 @@
     const targetW = Math.min(W * SLOT_TARGET_W_RATIO, SLOT_W_ABS_MAX);
     const targetH = Math.min(H * SLOT_TARGET_H_RATIO, SLOT_H_ABS_MAX);
 
-    const scaleX = targetW / baseW;
-    const scaleY = targetH / baseH;
+    const scaleX = targetW / baseW, scaleY = targetH / baseH;
     const scale = Math.max(SLOT_SCALE_MIN, Math.min(SLOT_SCALE_MAX, Math.min(scaleX, scaleY)));
 
-    const slotW = baseW * scale;
-    const slotH = baseH * scale;
+    const slotW = baseW * scale, slotH = baseH * scale;
 
     const slot = new PIXI.Container();
     slot.x = Math.floor((W - slotW)/2);
@@ -205,7 +202,7 @@
     reels.length = 0;
     for (let i=0;i<3;i++){
       const rc = new PIXI.Container(); rc.x = i*(REEL_W+GAP); rc.y=0; view.addChild(rc);
-      const order = [...SYMBOLS.map(s=>s.ch), ...SYMBOLS.map(s=>s.ch)]; // 2周分
+      const order = [...SYMBOLS.map(s=>s.ch), ...SYMBOLS.map(s=>s.ch)]; // 2周
       let y = -REEL_H*order.length*0.5; // [-half, +half)
       for (const ch of order){
         const spr = new PIXI.Sprite(textures[ch]);
@@ -221,7 +218,7 @@
     slot.addChild(gloss);
   }
 
-  // ===== Spin control（wrap/snap 安定化） =====
+  // ===== Spin control（wrap/snap 安定） =====
   const randChoice=arr=>arr[(Math.random()*arr.length)|0];
 
   function advance(dt){
@@ -298,18 +295,19 @@
     const D1 = 80, D2 = 100;
     const sy0 = 1.0, sy1 = 0.92;
     const t0 = performance.now();
-    function step(){
+    (function step(){
       const t = performance.now() - t0;
       if (t >= D1 + D2){ r.scale.y = 1; return; }
       if (t < D1){ const p = t / D1; r.scale.y = sy0 + (sy1 - sy0)*p; }
       else { const p = (t - D1) / D2; r.scale.y = sy1 + (sy0 - sy1)*p; }
       requestAnimationFrame(step);
-    }
-    step();
+    })();
   }
 
-  // ===== FX =====
+  // ===== FX（演出強度 FX_LEVEL でスケール） =====
+  let FX_LEVEL = 1.0; // 0.3〜1.5
   function sparkleBurst(x,y,n=24,color=0x66ccff){
+    n = Math.max(6, Math.floor(n * FX_LEVEL));
     for (let i=0;i<n;i++){
       const dot=new PIXI.Graphics(); dot.beginFill(0xffffff).drawCircle(0,0,Math.random()*1.8+0.7).endFill();
       const spr=new PIXI.Sprite(app.renderer.generateTexture(dot));
@@ -319,6 +317,7 @@
     }
   }
   function coinRain(count=30){
+    count = Math.max(4, Math.floor(count * FX_LEVEL));
     const {width:W}=app.renderer;
     for (let i=0;i<count;i++){
       setTimeout(()=>{
@@ -363,7 +362,7 @@
   }
   const escapeHtml=(s)=>String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;' }[m]));
 
-  // ===== Socket / Queue =====
+  // ===== Socket / Queue（直列化） =====
   const socket = io('/overlay', { transports:['websocket'], timeout:8000, reconnection:true, reconnectionDelay:800, reconnectionDelayMax:4000 });
   socket.on('connect', ()=>{ connStatus.textContent='connected'; connStatus.style.color='var(--good)'; });
   socket.on('disconnect', ()=>{ connStatus.textContent='disconnected'; connStatus.style.color='var(--hot)'; });
@@ -381,7 +380,7 @@
   const sleep = (ms)=>new Promise(r=>setTimeout(r, ms));
   const eventQueue = [];
   let draining = false;
-  const PACE_MS = 180; // 連続時の間隔（重ければ 220-260）
+  let PACE_MS = 180; // リモート設定で変更可能
 
   function enqueue(kind, payload){
     if (kind === 'bonus' && eventQueue.length >= 1) eventQueue.splice(1, 0, { kind, payload });
@@ -434,7 +433,7 @@
       coinRain(backlog > 5 ? 80 : 120);
       sparkleBurst(cx, cy-12, backlog > 5 ? 48 : 72, 0xffe066);
       showBanner(`GLOBAL BONUS +${p?.bonusScore||100} (by ${p?.userId||'anon'})`, '#ffcb4d');
-      // ボーナス達成後は 0 / threshold に戻す（progress イベントも来るが UX 的に即反映）
+      // ボーナス達成後の見た目初期化（progress イベントも来るが即更新）
       if (typeof lastThreshold === 'number') updateBonusProgress(0, lastThreshold);
       log(`🌟 GLOBAL BONUS +${p?.bonusScore||100} triggered by ${p?.userId||'anon'} (threshold ${p?.threshold||10}, remain ${p?.remain ?? 0})`);
     }catch(e){ console.error(e); }
@@ -460,18 +459,33 @@
     updateBonusProgress(done, thr);
   });
 
-  // 初期ロード時：ランキングと進捗
+  // === リモート設定（即時反映） ===
+  socket.on('config:update', (cfg)=>{
+    try{
+      if (typeof cfg?.paceMs === 'number') PACE_MS = Math.max(80, Math.min(800, Math.floor(cfg.paceMs)));
+      if (typeof cfg?.fxLevel === 'number') FX_LEVEL = Math.max(0.3, Math.min(1.5, Number(cfg.fxLevel)));
+      if (typeof cfg?.threshold === 'number') {
+        const thr = Math.max(1, cfg.threshold|0);
+        // 最新の remain を取り直してメーターを同期
+        fetch('/bonus/state').then(r=>r.json()).then(b=>{
+          const after = Number(b?.after || 0);
+          const remain = Number(b?.remain || 0);
+          const done = remain === 0 ? 0 : (thr - remain);
+          updateBonusProgress(done, thr);
+        }).catch(()=>{ updateBonusProgress(0, thr); });
+      }
+    }catch(e){ console.error(e); }
+  });
+
+  // 初期ロード時：ランキングと進捗、テクスチャ読み込み
   fetch('/overlay/state').then(r=>r.json()).then(d=> renderLB(d.top10 || [])).catch(()=>{});
   fetch('/bonus/state').then(r=>r.json()).then(b=>{
     const thr = Number(b?.threshold || 10);
-    const after = Number(b?.after || 0);
-    let remain = Number(b?.remain || 0);
-    // remain=0 は「ちょうど達成直後」もあり得る → 表示は 0/threshold に
+    const remain = Number(b?.remain || 0);
     const done = remain === 0 ? 0 : (thr - remain);
     updateBonusProgress(done, thr);
   }).catch(()=>{});
 
-  // テクスチャ読み込み → レイアウト
   (async function init(){
     await ensureTextures();
     layoutReels();

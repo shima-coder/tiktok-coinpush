@@ -9,10 +9,10 @@ import { readFile } from 'fs/promises';
 import path from 'path';
 import { spin } from './slot.js';
 
-// 依存注入用のコンテキスト
+// 依存注入用コンテキスト
 type Ctx = { redis: Redis | null; db: Pool | null; io: Server };
 
-/** ===== 既存ポイント制（今は使わなくても残します／互換） ===== */
+/** ===== 互換のポイント系（使ってなくても残す） ===== */
 const POINTS_INITIAL = Number(process.env.POINTS_INITIAL ?? 2000);
 const POINTS_COST_PER_SPIN = Number(process.env.POINTS_COST_PER_SPIN ?? 100);
 const POINTS_PER_YEN = Number(process.env.POINTS_PER_YEN ?? 1);
@@ -46,20 +46,32 @@ async function addPoints(redis: Redis, userId: string, amount: number): Promise<
   return after;
 }
 
-/** ===== 今回の新機能：全体カウント・ボーナス ===== */
-const GLOBAL_BONUS_THRESHOLD = Number(process.env.GLOBAL_BONUS_THRESHOLD ?? 10);   // 10回ごと
-const GLOBAL_BONUS_SCORE     = Number(process.env.GLOBAL_BONUS_SCORE ?? 100);      // +100を加算
+/** ===== 新：全体カウント・ボーナス（原子化） ===== */
+const GLOBAL_BONUS_THRESHOLD = Number(process.env.GLOBAL_BONUS_THRESHOLD ?? 10); // 10回ごと
+const GLOBAL_BONUS_SCORE     = Number(process.env.GLOBAL_BONUS_SCORE ?? 100);    // +100
 const GLOBAL_COUNT_KEY       = 'glob:act_count';
 
-// 行動→“物理スコア用メダル”の簡易変換（必要なら調整）
-// ※ simulate(seed, medals, jpPool) に渡す強さの基礎値です
+// INCR → しきい値判定 → 残カウント計算 を原子化
+// 戻り: { after, remain, triggered }
+const LUA_BONUS_INCR = `
+local key = KEYS[1]
+local thr = tonumber(ARGV[1])
+local after = redis.call('INCR', key)
+local rem = thr - (after % thr)
+if rem == thr then rem = 0 end
+local trig = 0
+if (after % thr) == 0 then trig = 1 end
+return {after, rem, trig}
+`;
+
+// 行動→メダル換算（演出のベース強度）
 const ACTION_MEDALS = {
   comment: Number(process.env.ACTION_COMMENT_MEDALS ?? 1),
   like:    Number(process.env.ACTION_LIKE_MEDALS    ?? 2),
   follow:  Number(process.env.ACTION_FOLLOW_MEDALS  ?? 5),
-  giftPerYen: Number(process.env.ACTION_GIFT_MEDALS_PER_YEN ?? 0.05) // 1円あたり
+  giftPerYen: Number(process.env.ACTION_GIFT_MEDALS_PER_YEN ?? 0.05)
 };
-// 非ギフト行動でもJP少し進めると画面が楽しい
+// ギフト以外でもJPを少し進めると楽しい
 const JP_ADD_PER_ACTION = Number(process.env.JP_ADD_PER_ACTION ?? 2);
 
 export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
@@ -73,6 +85,15 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
     if (!redis) return { top10: [] };
     const top10 = await getTopN(redis as any, 10);
     return { top10 };
+  });
+
+  // ★ 追加：ボーナス進捗の取得（リロード直後の初期化用）
+  app.get('/bonus/state', async () => {
+    if (!redis) return { threshold: GLOBAL_BONUS_THRESHOLD, remain: 0, after: 0 };
+    const after = Number(await (redis as any).get(GLOBAL_COUNT_KEY) || 0);
+    let remain = GLOBAL_BONUS_THRESHOLD - (after % GLOBAL_BONUS_THRESHOLD);
+    if (remain === GLOBAL_BONUS_THRESHOLD) remain = 0;
+    return { threshold: GLOBAL_BONUS_THRESHOLD, remain, after };
   });
 
   // ===== 既存：ギフト由来の演出（そのまま） =====
@@ -125,9 +146,7 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
     }
   });
 
-  // ===== 新規：ライブ行動でスピン（comment/like/follow/gift） =====
-  // 1) 行動1回ごとに通常スロットを回す
-  // 2) 全体カウントが閾値に到達したら「ボーナス演出 + +100加算」を発火し、カウントをリセット（しきい値分だけ減算）
+  // ===== 新：ライブ行動で回す + 全体カウント（原子化） =====
   app.post('/ingest/action', async (req, reply) => {
     try {
       const body: any = (req as any).body || {};
@@ -135,7 +154,7 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
       const userId = String(body.userId || 'anon');
       const amountYen = Number(body.amountYen || 0);
 
-      // 物理スコア用メダル換算
+      // メダル換算
       let medals = 1;
       if (action === 'gift') {
         medals = Math.max(1, Math.floor(amountYen * ACTION_MEDALS.giftPerYen));
@@ -147,7 +166,7 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
         medals = ACTION_MEDALS.comment;
       }
 
-      // ===== 通常スロットを回す =====
+      // 通常スロット
       const seed = randomUUID();
       const jpPool = redis ? Number((await (redis as any).get('jp_pool')) || 0) : 0;
       const phys = simulate(seed, medals, jpPool);
@@ -155,13 +174,11 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
       const finalScore = Math.max(0, Math.floor(phys.score * (spinRes.multiplier || 1)));
 
       if (redis) {
-        // JPの進み（ギフト以外も少し動かす）
         if (action === 'gift') {
           await (redis as any).incrby('jp_pool', Math.floor(amountYen * Number(process.env.JP_POOL_PCT || 0.02)));
         } else if (JP_ADD_PER_ACTION > 0) {
           await (redis as any).incrby('jp_pool', JP_ADD_PER_ACTION);
         }
-        // ランキング加算
         await addScore(redis as any, userId, finalScore);
       }
 
@@ -177,43 +194,45 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
       };
       io.of('/overlay').emit('play:event', payload);
 
-      // ===== 全体カウントを進める → 閾値でボーナス =====
-      let counterAfter = 0;
-      let bonusTriggered = false;
+      // 全体カウント原子化 INCR（remain/triggered を返す）
+      let after = 0, remain = 0, triggered = 0;
       if (redis) {
-        counterAfter = await (redis as any).incr(GLOBAL_COUNT_KEY); // 1増加
-        if (counterAfter >= GLOBAL_BONUS_THRESHOLD) {
-          // しきい値分だけ減算（オーバーシュート対策。残りは次回に持ち越し）
-          await (redis as any).decrby(GLOBAL_COUNT_KEY, GLOBAL_BONUS_THRESHOLD);
-          bonusTriggered = true;
+        const res: any = await (redis as any).eval(LUA_BONUS_INCR, 1, GLOBAL_COUNT_KEY, String(GLOBAL_BONUS_THRESHOLD));
+        after = Number(res?.[0] ?? 0);
+        remain = Number(res?.[1] ?? 0);
+        triggered = Number(res?.[2] ?? 0);
 
-          // +100 を「達成者」に付与
+        // 進捗イベント（全クライアントへ）
+        io.of('/overlay').emit('bonus:progress', {
+          threshold: GLOBAL_BONUS_THRESHOLD,
+          after, remain
+        });
+
+        if (triggered === 1) {
+          // 達成者に +100
           await addScore(redis as any, userId, GLOBAL_BONUS_SCORE);
-
-          // ボーナス演出イベント（フロント側で派手演出）
-          const remain = Number(await (redis as any).get(GLOBAL_COUNT_KEY)) || 0;
-          const bonusPayload = {
+          // ボーナス演出
+          io.of('/overlay').emit('play:bonus', {
             kind: 'global',
             userId,
             action,
             threshold: GLOBAL_BONUS_THRESHOLD,
             bonusScore: GLOBAL_BONUS_SCORE,
-            remain, // 次のボーナスまでの残りカウント
-          };
-          io.of('/overlay').emit('play:bonus', bonusPayload);
+            remain: 0
+          });
         }
       } else {
-        app.log.warn('REDIS_URL 未設定のため、全体カウント・ボーナスは無効です');
+        app.log.warn('REDIS_URL 未設定のため、全体カウントは無効です');
       }
 
-      return reply.send({ ok: true, result: payload, counterAfter, bonusTriggered });
+      return reply.send({ ok: true, result: payload, after, remain, bonusTriggered: triggered === 1 });
     } catch (e: any) {
       app.log.error(e);
       return reply.code(500).send({ ok: false, error: String(e?.message || e) });
     }
   });
 
-  /** ===== 既存：ポイント系 API（互換用。必要なければ使わなくてOK） ===== */
+  /** ===== 互換：ポイント系 ===== */
   app.get('/points/balance', async (req, reply) => {
     try {
       if (!redis) return reply.code(500).send({ ok: false, error: 'points_unavailable' });
@@ -236,9 +255,8 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
       const okFlag = Number(res?.[0] ?? 0);
       const after = Number(res?.[1] ?? 0);
       if (!okFlag) return reply.code(400).send({ ok: false, error: 'insufficient_points', userId, points: after });
-      const before = after + POINTS_COST_PER_SPIN;
 
-      const medals = 5; // 簡易
+      const medals = 5;
       const seed = randomUUID();
       const jpPool = Number((await (redis as any).get('jp_pool')) || 0);
       const phys = simulate(seed, medals, jpPool);
@@ -259,7 +277,7 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
         source: 'points' as const,
       };
       io.of('/overlay').emit('play:event', payload);
-      return reply.send({ ok: true, userId, before, after, cost: POINTS_COST_PER_SPIN, result: payload });
+      return reply.send({ ok: true, userId, pointsAfter: after, cost: POINTS_COST_PER_SPIN, result: payload });
     } catch (e: any) {
       app.log.error(e);
       return reply.code(500).send({ ok: false, error: String(e?.message || e) });
@@ -299,7 +317,7 @@ export function applyRoutes(app: FastifyInstance, ctx: Ctx) {
     }
   });
 
-  // ===== overlay.html =====
+  // ===== overlay.html 静的配信 =====
   app.get('/overlay.html', async (_req, reply) => {
     try {
       const p = path.resolve(process.cwd(), 'dist/overlay.html');

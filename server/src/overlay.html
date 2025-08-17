@@ -17,13 +17,14 @@
       width:min(100vw,56.25vh); height:min(177.78vw,100vh); aspect-ratio:9/16;
       border:1px solid var(--line); border-radius:20px;
       background: linear-gradient(180deg,#070b12,#05060a);
-      overflow:hidden; display:grid; grid-template-rows:auto 1fr auto auto; gap:10px; padding:10px;
+      overflow:hidden; display:grid; grid-template-rows:auto auto 1fr auto auto; gap:10px; padding:10px; /* ← 進捗バーを1段追加 */
     }
     .bar{display:grid; gap:8px; grid-template-columns:1fr auto; align-items:center; padding:10px 12px; border:1px solid var(--line); border-radius:14px; background:linear-gradient(180deg,#0b1120,#090e18); box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
     .title{font-weight:800; letter-spacing:.4px; font-size:14px}
     .pill{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:#0e1525; border:1px solid #1a2436; color:#cbd5e1; font-size:11px; white-space:nowrap}
-    .meter{grid-column:1/-1; position:relative; height:12px; border-radius:999px; background:#0a0f18; border:1px solid #182032; overflow:hidden}
+    .meter{position:relative; height:12px; border-radius:999px; background:#0a0f18; border:1px solid #182032; overflow:hidden}
     .meter .fill{position:absolute; inset:0; width:0%; background:linear-gradient(90deg,#1240ff,#4dd4ff,#00e5a8); filter:brightness(1.15); transition:width .35s cubic-bezier(.2,.8,.2,1)}
+    .subbar{display:grid; grid-template-columns:1fr auto; align-items:center; gap:8px; padding:6px 10px; border:1px solid var(--line); border-radius:12px; background:linear-gradient(180deg,#0b1018,#090e18);}
 
     .stage{position:relative; border:1px solid var(--line); border-radius:16px; overflow:hidden;
       background: radial-gradient(60% 30% at 50% 10%, rgba(16,24,48,.6), transparent 70%), radial-gradient(90% 80% at 50% 100%, #05080f, #05060a 60%);}
@@ -46,22 +47,35 @@
 <body>
   <div class="frame">
     <div class="phone">
+      <!-- 1: タイトルバー -->
       <div class="bar">
         <div class="title">🎰 COIN FEVER — Casino Style</div>
         <div class="pill">Socket: <span id="conn-status">connecting...</span></div>
-        <div class="meter"><div class="fill" id="jp-fill"></div></div>
       </div>
 
+      <!-- 2: 進捗バー（BONUS / JP） -->
+      <div class="subbar">
+        <div class="pill">BONUS <span id="bonus-text">0 / 10</span></div>
+        <div class="pill">JP <span id="jp-text">0%</span></div>
+        <div style="grid-column:1/-1; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <div class="meter"><div class="fill" id="bonus-fill"></div></div>
+          <div class="meter"><div class="fill" id="jp-fill"></div></div>
+        </div>
+      </div>
+
+      <!-- 3: ステージ -->
       <div class="stage" id="stage">
         <div class="combo" id="combo">COMBO <span class="x">x1.0</span></div>
         <div class="banner" id="banner"></div>
       </div>
 
+      <!-- 4: ランキング -->
       <div class="panel">
         <h3>🏆 ランキング Top10（今日）</h3>
         <div id="lb"></div>
       </div>
 
+      <!-- 5: ログ -->
       <div class="panel">
         <h3>🎯 最近のヒット</h3>
         <div id="log" class="log"></div>
@@ -75,7 +89,10 @@
   <script>
   // ===== DOM =====
   const $ = (s)=>document.querySelector(s);
-  const stageEl = $('#stage'), connStatus = $('#conn-status'), lbEl = $('#lb'), logEl = $('#log'), jpFill = $('#jp-fill'), banner = $('#banner'), comboEl = $('#combo');
+  const stageEl = $('#stage'), connStatus = $('#conn-status'), lbEl = $('#lb'), logEl = $('#log');
+  const bonusFill = $('#bonus-fill'), bonusText = $('#bonus-text');
+  const jpFill = $('#jp-fill'), jpText = $('#jp-text');
+  const banner = $('#banner'), comboEl = $('#combo');
   const clamp=(v,min,max)=>Math.max(min, Math.min(max, v));
   const log=(s)=>{ const lines=(logEl.textContent||'').split('\n').filter(Boolean).slice(-18); lines.push(s); logEl.textContent = lines.join('\n'); };
 
@@ -86,7 +103,7 @@
   const bgLayer = new PIXI.Container(); const reelLayer = new PIXI.Container(); const fxLayer = new PIXI.Container();
   root.addChild(bgLayer, reelLayer, fxLayer);
 
-  // ===== Background =====
+  // ===== BG =====
   function drawBG(){
     bgLayer.removeChildren();
     const {width:w, height:h} = app.renderer;
@@ -99,9 +116,34 @@
   drawBG();
   app.ticker.add(()=>{ for (const p of bgLayer.children.slice(1)) { p.y -= p.speed; if (p.y < -10) p.y = app.renderer.height + 10; }});
 
-  // ===== Symbols (emoji textures) =====
-  const SYMBOLS = [{ch:'🪙',c:0xffd54a},{ch:'⭐',c:0xfff9a6},{ch:'🎁',c:0xff7fb0},{ch:'🔥',c:0xff694a},{ch:'💎',c:0x7fd4ff},{ch:'🍀',c:0x6aff92}];
-  function makeSymbolTexture(ch, color){
+  // ===== Symbols（将来: atlas対応のための抽象化） =====
+  const SYMBOLS = [{ch:'🪙',c:0xffd54a,name:'coin'},{ch:'⭐',c:0xfff9a6,name:'star'},{ch:'🎁',c:0xff7fb0,name:'gift'},{ch:'🔥',c:0xff694a,name:'fire'},{ch:'💎',c:0x7fd4ff,name:'gem'},{ch:'🍀',c:0x6aff92,name:'clover'}];
+
+  let atlas = null;
+  const textures = {};
+  async function loadAtlasIfAny(){
+    try{
+      // ③ の布石：/assets/symbols.json が存在すれば使う（なければ catch へ）
+      const res = await fetch('/assets/symbols.json', { cache: 'no-store' });
+      if (!res.ok) throw new Error('no atlas');
+      atlas = await res.json(); // 形式: { meta:..., frames:{ 'coin.png':{...}, ... } } 前提
+      // Atlas画像は /assets/symbols.png 想定
+      const base = await PIXI.Assets.load('/assets/symbols.png');
+      for (const s of SYMBOLS){
+        const f = atlas.frames?.[`${s.name}.png`];
+        if (!f) throw new Error('atlas missing frame '+s.name);
+        const rect = new PIXI.Rectangle(f.frame.x, f.frame.y, f.frame.w, f.frame.h);
+        textures[s.ch] = new PIXI.Texture({ source: base.source, frame: rect });
+      }
+      console.info('atlas loaded');
+      return true;
+    }catch(e){
+      console.info('atlas not found, fallback to emoji textures');
+      return false;
+    }
+  }
+
+  function makeEmojiTexture(ch, color){
     const c = new PIXI.Container();
     const bg = new PIXI.Graphics().beginFill(0x0e1626).drawRoundedRect(0,0,220,220,26).endFill();
     bg.lineStyle(3,0x1c2a48,1).drawRoundedRect(1.5,1.5,217,217,24);
@@ -112,13 +154,18 @@
     c.destroy({children:true, texture:true, baseTexture:true});
     return rt;
   }
-  const textures = {}; for (const s of SYMBOLS) textures[s.ch] = makeSymbolTexture(s.ch, s.c);
 
-  // ===== Geometry (portrait tuned) =====
+  async function ensureTextures(){
+    const ok = await loadAtlasIfAny();
+    if (ok) return;
+    for (const s of SYMBOLS) textures[s.ch] = makeEmojiTexture(s.ch, s.c);
+  }
+
+  // ===== Geometry =====
   const REEL_W = 240, REEL_H = 240;   // 1セル基準
   const GAP = 14;
-  const SLOT_TARGET_W_RATIO = 0.90;   // 幅の占有率
-  const SLOT_TARGET_H_RATIO = 0.42;   // 高さの占有率
+  const SLOT_TARGET_W_RATIO = 0.90;
+  const SLOT_TARGET_H_RATIO = 0.42;
   const SLOT_SCALE_MIN = 0.55, SLOT_SCALE_MAX = 1.60;
   const SLOT_W_ABS_MAX = 720, SLOT_H_ABS_MAX = 420;
 
@@ -135,7 +182,7 @@
 
     const scaleX = targetW / baseW;
     const scaleY = targetH / baseH;
-    const scale = clamp(Math.min(scaleX, scaleY), SLOT_SCALE_MIN, SLOT_SCALE_MAX);
+    const scale = Math.max(SLOT_SCALE_MIN, Math.min(SLOT_SCALE_MAX, Math.min(scaleX, scaleY)));
 
     const slotW = baseW * scale;
     const slotH = baseH * scale;
@@ -173,10 +220,8 @@
     gloss.moveTo(REEL_W*2+GAP*1.5, -6).lineTo(REEL_W*2+GAP*1.5, baseH+6);
     slot.addChild(gloss);
   }
-  layoutReels();
-  app.renderer.on('resize', layoutReels);
 
-  // ===== Spin control (wrap/snap fixed) =====
+  // ===== Spin control（wrap/snap 安定化） =====
   const randChoice=arr=>arr[(Math.random()*arr.length)|0];
 
   function advance(dt){
@@ -188,7 +233,7 @@
       const half = colH * 0.5;
       for (const spr of rc.children){
         spr.y += r.vy * dt;
-        if (spr.y > half) spr.y -= colH;        // 一方向にラップ
+        if (spr.y > half) spr.y -= colH; // 一方向ラップ
       }
     }
   }
@@ -230,14 +275,14 @@
           const adjust = diff * REEL_H;
           r.c.children.forEach(s => { s.y -= adjust; });
 
-          const off = topSpr.y - adjust;             // top を y=0 に揃える
+          const off = topSpr.y - adjust;           // top を y=0 に揃える
           r.c.children.forEach(s => { s.y -= off; });
 
-          r.c.children.forEach(s => {                // グリッドへスナップ（穴永続防止）
+          r.c.children.forEach(s => {              // グリッドへスナップ
             s.y = Math.round(s.y / REEL_H) * REEL_H;
           });
 
-          bounceReel(i);                              // reparentしない
+          bounceReel(i);
           return resolve();
         }
         r.vy = startVy * (1 - easeOut(t)) + 2.2;
@@ -292,8 +337,8 @@
   app.ticker.add(()=>{ for (const s of fxLayer.children){ if (s.life!==undefined){ s.x+=s.vx; s.y+=s.vy; s.rotation+=s.vr; s.alpha-=.02; s.life--; if (s.life<=0||s.alpha<=0) s.destroy(); } else if (s.update){ s.update(); } } });
 
   // ===== Combo & JP meter =====
-  let jpValue=0; const addJackpot=(deltaScore)=>{ jpValue = clamp(jpValue + deltaScore/6000, 0, 1); jpFill.style.width=(jpValue*100).toFixed(1)+'%'; };
-  setInterval(()=>{ jpValue = clamp(jpValue - 0.0025, 0, 1); jpFill.style.width=(jpValue*100).toFixed(1)+'%'; }, 220);
+  let jpValue=0; const addJackpot=(deltaScore)=>{ jpValue = clamp(jpValue + deltaScore/6000, 0, 1); const p=(jpValue*100); jpFill.style.width=p.toFixed(1)+'%'; jpText.textContent=p.toFixed(0)+'%'; };
+  setInterval(()=>{ jpValue = clamp(jpValue - 0.0025, 0, 1); const p=(jpValue*100); jpFill.style.width=p.toFixed(1)+'%'; jpText.textContent=p.toFixed(0)+'%'; }, 220);
   let lastHitAt=0, comboMul=1.0;
   function onComboHit(extend=true){
     const t=performance.now(); const dt=(t-lastHitAt)/1000; lastHitAt=t;
@@ -318,7 +363,7 @@
   }
   const escapeHtml=(s)=>String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;' }[m]));
 
-  // ===== Socket =====
+  // ===== Socket / Queue =====
   const socket = io('/overlay', { transports:['websocket'], timeout:8000, reconnection:true, reconnectionDelay:800, reconnectionDelayMax:4000 });
   socket.on('connect', ()=>{ connStatus.textContent='connected'; connStatus.style.color='var(--good)'; });
   socket.on('disconnect', ()=>{ connStatus.textContent='disconnected'; connStatus.style.color='var(--hot)'; });
@@ -333,26 +378,23 @@
     MEGA:   { stop:'💎',  burst:36, rain:56, banner:'MEGA HIT!', color:'#ff4d67' },
   };
 
-  // === 直列実行キュー（並走防止 & ペース制御） ===
   const sleep = (ms)=>new Promise(r=>setTimeout(r, ms));
   const eventQueue = [];
   let draining = false;
-  const PACE_MS = 180; // 重ければ 220–260 に
+  const PACE_MS = 180; // 連続時の間隔（重ければ 220-260）
 
   function enqueue(kind, payload){
-    // ボーナスは「今の次」に割り込み（同時発生を素早く出す）
     if (kind === 'bonus' && eventQueue.length >= 1) eventQueue.splice(1, 0, { kind, payload });
     else eventQueue.push({ kind, payload });
     if (!draining) drainQueue();
   }
-
   async function drainQueue(){
     draining = true;
     while (eventQueue.length){
       const job = eventQueue.shift();
       if (job.kind === 'event')      await handlePlayEvent(job.payload);
       else if (job.kind === 'bonus') await handleBonus(job.payload);
-      await sleep(PACE_MS); // 次の回転まで間を置く
+      await sleep(PACE_MS);
     }
     draining = false;
   }
@@ -372,7 +414,7 @@
         log(`+${(payload.score||0)}  ${payload.userId||'anon'}  [${tier}] x${(multiplier||1).toFixed(2)}  jp:+${payload.jpDelta||0}`);
         return;
       }
-      // 旧形式フォールバック
+      // 旧形式
       const { userId, fallen=0, bonus=0, jpDelta=0, score=0 } = payload || {};
       onComboHit(true); addJackpot((jpDelta||0) + (score||0));
       await spinReels(fallen >= 3 || bonus > 0 ? ['💎','💎','💎'] : null);
@@ -387,21 +429,54 @@
     try{
       const r = app.renderer, cx=r.width/2, cy=r.height/2;
       screenFlash(320);
-      await spinReels(['💎','💎','💎']);      // 確定演出
-      const backlog = eventQueue.length;     // キューに応じて軽量化
+      await spinReels(['💎','💎','💎']);
+      const backlog = eventQueue.length;
       coinRain(backlog > 5 ? 80 : 120);
       sparkleBurst(cx, cy-12, backlog > 5 ? 48 : 72, 0xffe066);
       showBanner(`GLOBAL BONUS +${p?.bonusScore||100} (by ${p?.userId||'anon'})`, '#ffcb4d');
+      // ボーナス達成後は 0 / threshold に戻す（progress イベントも来るが UX 的に即反映）
+      if (typeof lastThreshold === 'number') updateBonusProgress(0, lastThreshold);
       log(`🌟 GLOBAL BONUS +${p?.bonusScore||100} triggered by ${p?.userId||'anon'} (threshold ${p?.threshold||10}, remain ${p?.remain ?? 0})`);
     }catch(e){ console.error(e); }
   }
 
-  // ソケット受信 → 必ずキュー投入（並走禁止）
+  // 受信は必ずキューへ
   socket.on('play:event', (payload)=> enqueue('event', payload));
   socket.on('play:bonus', (p)=> enqueue('bonus', p));
 
-  // 初回：ランキング
+  // === 進捗UI ===
+  let lastThreshold = 10;
+  function updateBonusProgress(done, thr){
+    lastThreshold = thr;
+    const pct = thr>0 ? (done / thr) * 100 : 0;
+    bonusFill.style.width = Math.max(0, Math.min(100, pct)).toFixed(1)+'%';
+    bonusText.textContent = `${done} / ${thr}`;
+  }
+  socket.on('bonus:progress', (p)=>{
+    const thr = Number(p?.threshold || 10);
+    const after = Number(p?.after || 0);
+    const remain = Number(p?.remain || 0);
+    const done = remain === 0 ? 0 : (thr - remain);
+    updateBonusProgress(done, thr);
+  });
+
+  // 初期ロード時：ランキングと進捗
   fetch('/overlay/state').then(r=>r.json()).then(d=> renderLB(d.top10 || [])).catch(()=>{});
+  fetch('/bonus/state').then(r=>r.json()).then(b=>{
+    const thr = Number(b?.threshold || 10);
+    const after = Number(b?.after || 0);
+    let remain = Number(b?.remain || 0);
+    // remain=0 は「ちょうど達成直後」もあり得る → 表示は 0/threshold に
+    const done = remain === 0 ? 0 : (thr - remain);
+    updateBonusProgress(done, thr);
+  }).catch(()=>{});
+
+  // テクスチャ読み込み → レイアウト
+  (async function init(){
+    await ensureTextures();
+    layoutReels();
+    app.renderer.on('resize', layoutReels);
+  })();
   </script>
 </body>
 </html>

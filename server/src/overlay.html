@@ -73,19 +73,20 @@
   <script src="https://unpkg.com/pixi.js@7.4.0/dist/pixi.min.js" crossorigin="anonymous"></script>
 
   <script>
+  // ===== DOM handles =====
   const $ = (s)=>document.querySelector(s);
   const stageEl = $('#stage'), connStatus = $('#conn-status'), lbEl = $('#lb'), logEl = $('#log'), jpFill = $('#jp-fill'), banner = $('#banner'), comboEl = $('#combo');
   function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
   function log(s){ const lines=(logEl.textContent||'').split('\n').filter(Boolean).slice(-18); lines.push(s); logEl.textContent = lines.join('\n'); }
 
-  // ====== Pixi App ======
+  // ===== Pixi App =====
   const app = new PIXI.Application({ resizeTo: stageEl, backgroundAlpha:0, antialias:true, powerPreference:'high-performance' });
   stageEl.appendChild(app.view);
   const root = new PIXI.Container(); app.stage.addChild(root);
   const bgLayer = new PIXI.Container(); const reelLayer = new PIXI.Container(); const fxLayer = new PIXI.Container();
   root.addChild(bgLayer, reelLayer, fxLayer);
 
-  // ====== BG particles ======
+  // ===== Background =====
   function drawBG(){
     bgLayer.removeChildren();
     const {width:w, height:h} = app.renderer;
@@ -98,7 +99,7 @@
   drawBG();
   app.ticker.add(()=>{ for (const p of bgLayer.children.slice(1)) { p.y -= p.speed; if (p.y < -10) p.y = app.renderer.height + 10; }});
 
-  // ====== Reels（テキストテクスチャ） ======
+  // ===== Symbols (text textures) =====
   const SYMBOLS = [{ch:'🪙',c:0xffd54a},{ch:'⭐',c:0xfff9a6},{ch:'🎁',c:0xff7fb0},{ch:'🔥',c:0xff694a},{ch:'💎',c:0x7fd4ff},{ch:'🍀',c:0x6aff92}];
   function makeSymbolTexture(ch, color){
     const c = new PIXI.Container();
@@ -113,68 +114,57 @@
   }
   const textures = {}; for (const s of SYMBOLS) textures[s.ch] = makeSymbolTexture(s.ch, s.c);
 
-  // ====== サイズ係数（←ここ大幅見直し） ======
-  const REEL_W = 240, REEL_H = 240;   // ベース1セル
+  // ===== Slot geometry (portrait tuned) =====
+  const REEL_W = 240, REEL_H = 240;   // base cell size
   const GAP = 14;
 
-  // 目標サイズ（端末に依存せず安定）：幅の ~90% / 高さの ~42% に収める
+  // target size ratios (within stage)
   const SLOT_TARGET_W_RATIO = 0.90;
   const SLOT_TARGET_H_RATIO = 0.42;
-  const SLOT_SCALE_MIN = 0.55;  // 小さくなりすぎ防止
-  const SLOT_SCALE_MAX = 1.60;  // 大きくなりすぎ防止
-  const SLOT_W_ABS_MAX = 720;   // タブレット等での上限
+  const SLOT_SCALE_MIN = 0.55;
+  const SLOT_SCALE_MAX = 1.60;
+  const SLOT_W_ABS_MAX = 720;
   const SLOT_H_ABS_MAX = 420;
 
   const reelMask = new PIXI.Graphics(); const reels = [];
-
   function layoutReels(){
     reelLayer.removeChildren();
     const {width:W, height:H} = app.renderer;
 
-    // 3リール合計の「素の幅・高さ」
     const baseW = REEL_W*3 + GAP*2;
     const baseH = REEL_H;
 
-    // 画面の目標領域
     const targetW = Math.min(W * SLOT_TARGET_W_RATIO, SLOT_W_ABS_MAX);
     const targetH = Math.min(H * SLOT_TARGET_H_RATIO, SLOT_H_ABS_MAX);
 
-    // 幅・高さの両方でスケールを算出 → 小さい方を採用
     const scaleX = targetW / baseW;
     const scaleY = targetH / baseH;
     const scale = clamp(Math.min(scaleX, scaleY), SLOT_SCALE_MIN, SLOT_SCALE_MAX);
 
-    // 実際のスロットの描画サイズ
     const slotW = baseW * scale;
     const slotH = baseH * scale;
 
-    // ステージ中央に配置
     const slot = new PIXI.Container();
     slot.x = Math.floor((W - slotW)/2);
     slot.y = Math.floor((H - slotH)/2);
     slot.scale.set(scale);
     reelLayer.addChild(slot);
 
-    // フレーム
     const frame = new PIXI.Graphics();
     frame.lineStyle(8,0x1a2b4a,1).beginFill(0x0e1522).drawRoundedRect(-12,-12,baseW+24,baseH+24,22).endFill();
     frame.filters=[new PIXI.filters.BlurFilter(1.5)];
     slot.addChild(frame);
 
-    // ビューポート（マスク）
     reelMask.clear();
     reelMask.beginFill(0xffffff).drawRoundedRect(0,0,baseW,baseH,16).endFill();
-    const view = new PIXI.Container();
-    view.mask = reelMask;
-    view.addChild(reelMask);
-    slot.addChild(view);
+    const view = new PIXI.Container(); view.mask = reelMask; view.addChild(reelMask); slot.addChild(view);
 
-    // リール
     reels.length = 0;
     for (let i=0;i<3;i++){
       const rc = new PIXI.Container(); rc.x = i*(REEL_W+GAP); rc.y=0; view.addChild(rc);
+      // use duplicated order for long loop
       const order = [...SYMBOLS.map(s=>s.ch), ...SYMBOLS.map(s=>s.ch)];
-      let y = -REEL_H*order.length*0.5;
+      let y = -REEL_H*order.length*0.5; // spread around 0
       for (const ch of order){
         const spr = new PIXI.Sprite(textures[ch]);
         spr.x=(REEL_W - spr.width)/2; spr.y=y; rc.addChild(spr); y += REEL_H;
@@ -182,20 +172,34 @@
       reels.push({c: rc, vy: 0, spinning:false});
     }
 
-    // 前面グロス
     const gloss = new PIXI.Graphics();
     gloss.lineStyle(2,0x2e4578,1);
     gloss.moveTo(REEL_W+GAP/2, -6).lineTo(REEL_W+GAP/2, baseH+6);
     gloss.moveTo(REEL_W*2+GAP*1.5, -6).lineTo(REEL_W*2+GAP*1.5, baseH+6);
     slot.addChild(gloss);
   }
-
   layoutReels();
   app.renderer.on('resize', layoutReels);
 
-  // ====== Spin control ======
+  // ===== Spin control (fixed wrapping & snapping) =====
   function randChoice(arr){ return arr[(Math.random()*arr.length)|0]; }
-  function advance(dt){ for (const r of reels){ if (!r.spinning) continue; r.c.children.forEach(spr=>{ spr.y += r.vy*dt; if (spr.y > REEL_H* (SYMBOLS.length)) spr.y -= REEL_H*SYMBOLS.length*2; }); } }
+
+  // 正しいラップ：列の実長さで wrap（穴防止）
+  function advance(dt){
+    for (const r of reels){
+      if (!r.spinning) continue;
+      const rc = r.c;
+      const n = rc.children.length;
+      const colH = n * REEL_H;
+      const half = colH * 0.5;
+
+      for (const spr of rc.children){
+        spr.y += r.vy * dt;
+        if (spr.y > half) spr.y -= colH; // 一方向にだけ戻す
+      }
+    }
+  }
+
   async function spinReels(finalSymbols=null){
     for (let i=0;i<3;i++){ const r=reels[i]; r.spinning=true; r.vy = 48 + i*4; }
     const accel=400, t0=performance.now(); while (performance.now()-t0<accel){ advance(1); await new Promise(r=>requestAnimationFrame(r)); }
@@ -204,56 +208,95 @@
     for (let i=0;i<3;i++){ await stopReelTo(i, finals[i]); }
     return finals;
   }
-  function currentTopSymbolIndex(rc){ let best=null,bestDist=1e9,idx=0; rc.children.forEach((spr,i)=>{ const d=Math.abs(spr.y); if (d<bestDist){best=spr;bestDist=d;idx=i;} }); return idx % SYMBOLS.length; }
+
+  // 最上( y≈0 )に近いスプライト＆シンボル番号
+  function nearestTop(rc){
+    let bestSpr=null, bestDist=1e9, idx=0;
+    rc.children.forEach((spr,i)=>{
+      const d = Math.abs(spr.y);
+      if (d < bestDist){ bestSpr=spr; bestDist=d; idx=i; }
+    });
+    const symIdx = idx % SYMBOLS.length;
+    return { spr: bestSpr, symIdx };
+  }
+
   async function stopReelTo(i,ch){
-    const r = reels[i]; const targetIdx = SYMBOLS.findIndex(s=>s.ch===ch);
-    const easeOut = t => 1 - Math.pow(1-t, 2.2); const startVy=r.vy; const dur=700+i*130; const t0=performance.now();
+    const r = reels[i];
+    const targetIdx = SYMBOLS.findIndex(s=>s.ch===ch);
+    const easeOut = t => 1 - Math.pow(1-t, 2.2);
+    const startVy = r.vy;
+    const dur = 700 + i*130;
+
+    const t0 = performance.now();
     return new Promise(resolve=>{
-      function step(){ const t=(performance.now()-t0)/dur;
-        if (t>=1){ r.vy=0; r.spinning=false;
-          const topIdx = currentTopSymbolIndex(r.c); let diff = (targetIdx - topIdx + SYMBOLS.length) % SYMBOLS.length; const adjust = diff*REEL_H; r.c.children.forEach(spr=> spr.y -= adjust);
-          bounceReel(i); return resolve();
+      function step(){
+        const t = (performance.now()-t0)/dur;
+        if (t >= 1){
+          r.vy = 0; r.spinning = false;
+
+          // 最上に近いスプライトの行に合わせる
+          const { spr: topSpr, symIdx: topSymIdx } = nearestTop(r.c);
+
+          // 目的の図柄までの差分（REEL_H単位）だけ全スプライトを移動
+          const diff = (targetIdx - topSymIdx + SYMBOLS.length) % SYMBOLS.length;
+          const adjust = diff * REEL_H;
+          r.c.children.forEach(s => { s.y -= adjust; });
+
+          // top の y を 0 に正確に合わせる（浮動小数誤差の解消）
+          const off = topSpr.y - adjust;
+          r.c.children.forEach(s => { s.y -= off; });
+
+          // 仕上げに“グリッドへスナップ”（穴の永続化を防止）
+          r.c.children.forEach(s => { s.y = Math.round(s.y / REEL_H) * REEL_H; });
+
+          // その場スケールのバウンド（reparentしない）
+          bounceReel(i);
+          return resolve();
         }
-        r.vy = startVy * (1 - easeOut(t)) + 2.2; advance(1); requestAnimationFrame(step);
-      } step();
+        r.vy = startVy * (1 - easeOut(t)) + 2.2;
+        advance(1);
+        requestAnimationFrame(step);
+      }
+      step();
     });
   }
+
+  // 親を付け替えないバウンド
   function bounceReel(i){
-    const r = reels[i].c;            // ← 既存のリールコンテナ（マスクの内側）
-    const D1 = 80, D2 = 100;         // 収縮→復帰の時間（ms）
-    const sy0 = 1.0, sy1 = 0.92;     // 元の縮尺 / 収縮後
+    const r = reels[i].c;
+    const D1 = 80, D2 = 100;
+    const sy0 = 1.0, sy1 = 0.92;
     const t0 = performance.now();
     function step(){
       const t = performance.now() - t0;
       if (t >= D1 + D2){ r.scale.y = 1; return; }
       if (t < D1){
-        const p = t / D1;            // 収縮
-        r.scale.y = sy0 + (sy1 - sy0)*p;
+        const p = t / D1; r.scale.y = sy0 + (sy1 - sy0)*p;
       } else {
-        const p = (t - D1) / D2;     // 復帰
-        r.scale.y = sy1 + (sy0 - sy1)*p;
+        const p = (t - D1) / D2; r.scale.y = sy1 + (sy0 - sy1)*p;
       }
       requestAnimationFrame(step);
     }
     step();
   }
-  // ====== FX ======
+
+  // ===== FX =====
   function sparkleBurst(x,y,n=24,color=0x66ccff){ for (let i=0;i<n;i++){ const dot=new PIXI.Graphics(); dot.beginFill(0xffffff).drawCircle(0,0,Math.random()*1.8+0.7).endFill(); const spr=new PIXI.Sprite(app.renderer.generateTexture(dot)); spr.x=x; spr.y=y; spr.tint=color; spr.alpha=.9; spr.blendMode=PIXI.BLEND_MODES.ADD; spr.vx=(Math.random()*2-1)*(3+Math.random()*3); spr.vy=(Math.random()*2-1)*(3+Math.random()*3); spr.vr=(Math.random()*2-1)*.12; spr.life=36+(Math.random()*12|0); fxLayer.addChild(spr); } }
   function coinRain(count=30){ const {width:W}=app.renderer; for (let i=0;i<count;i++){ setTimeout(()=>{ const t=new PIXI.Text('🪙',{fontSize:32}); t.x=Math.random()*W; t.y=-20; t.vy=2+Math.random()*2.5; t.vx=(Math.random()*2-1)*.6; t.blendMode=PIXI.BLEND_MODES.SCREEN; t.alpha=.92; fxLayer.addChild(t); t.update=()=>{ t.x+=t.vx; t.y+=t.vy; t.vy+=.04; if(t.y>app.renderer.height+40){ t.destroy(); } }; }, i*40); } }
   function screenFlash(ms=260){ const r=new PIXI.Graphics().beginFill(0xffffff,.9).drawRect(0,0,app.renderer.width,app.renderer.height).endFill(); fxLayer.addChild(r); const t0=performance.now(); function step(){ const t=(performance.now()-t0)/ms; if (t>=1){ r.destroy(); return; } r.alpha = .9*(1-t); requestAnimationFrame(step); } step(); }
   app.ticker.add(()=>{ for (const s of fxLayer.children){ if (s.life!==undefined){ s.x+=s.vx; s.y+=s.vy; s.rotation+=s.vr; s.alpha-=.02; s.life--; if (s.life<=0||s.alpha<=0) s.destroy(); } else if (s.update){ s.update(); } } });
 
-  // ====== Combo & Jackpot ======
+  // ===== Combo & JP meter =====
   let jpValue=0; function addJackpot(deltaScore){ jpValue = clamp(jpValue + deltaScore/6000, 0, 1); jpFill.style.width=(jpValue*100).toFixed(1)+'%'; }
   setInterval(()=>{ jpValue = clamp(jpValue - 0.0025, 0, 1); jpFill.style.width=(jpValue*100).toFixed(1)+'%'; }, 220);
   let lastHitAt=0, comboMul=1.0; function onComboHit(extend=true){ const t=performance.now(); const dt=(t-lastHitAt)/1000; lastHitAt=t; if (extend && dt<2.5) comboMul=clamp(comboMul+0.25,1,5); else if(!extend) comboMul=1.0; comboEl.querySelector('.x').textContent='x'+comboMul.toFixed(1); comboEl.animate([{transform:'scale(1.0)'},{transform:'scale(1.12)'},{transform:'scale(1.0)'}],{duration:260, easing:'ease-out'}); }
   function showBanner(text,color){ banner.textContent=text; banner.style.color=color||'#fff'; banner.style.display='block'; banner.animate([{opacity:0, transform:'translate(-50%,-6px)'},{opacity:1, transform:'translate(-50%,0)'}],{duration:220,easing:'ease-out'}); setTimeout(()=>banner.style.display='none', 900); }
 
-  // ====== Leaderboard ======
+  // ===== Leaderboard =====
   function renderLB(list){ lbEl.innerHTML=''; (list||[]).forEach((it,idx)=>{ const row=document.createElement('div'); row.className='lb-item'; row.innerHTML=`<div class="rank">${idx+1}</div><div class="uid">${escapeHtml(it.userId||'anon')}</div><div class="score">${Number(it.score||0).toLocaleString()}</div>`; lbEl.appendChild(row); }); }
   function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;' }[m])); }
 
-  // ====== Socket ======
+  // ===== Socket =====
   const socket = io('/overlay', { transports:['websocket'], timeout:8000, reconnection:true, reconnectionDelay:800, reconnectionDelayMax:4000 });
   socket.on('connect', ()=>{ connStatus.textContent='connected'; connStatus.style.color='var(--good)'; });
   socket.on('disconnect', ()=>{ connStatus.textContent='disconnected'; connStatus.style.color='var(--hot)'; });
@@ -283,7 +326,7 @@
         log(`+${(payload.score||0)}  ${payload.userId||'anon'}  [${tier}] x${(multiplier||1).toFixed(2)}  jp:+${payload.jpDelta||0}`);
         return;
       }
-      // 旧形式
+      // fallback（旧形式）
       const { userId, fallen=0, bonus=0, jpDelta=0, score=0 } = payload || {};
       onComboHit(true); addJackpot((jpDelta||0) + (score||0));
       await spinReels(fallen >= 3 || bonus > 0 ? ['💎','💎','💎'] : null);
@@ -294,7 +337,7 @@
     }catch(e){ console.error(e); }
   });
 
-  // 全体ボーナス演出
+  // Global bonus
   socket.on('play:bonus', async (p)=>{
     try{
       const r = app.renderer, cx=r.width/2, cy=r.height/2;
@@ -306,7 +349,7 @@
     }catch(e){ console.error(e); }
   });
 
-  // 初回：ランキング取得
+  // 初回：ランキング
   fetch('/overlay/state').then(r=>r.json()).then(d=> renderLB(d.top10 || [])).catch(()=>{});
   </script>
 </body>

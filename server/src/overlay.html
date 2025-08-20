@@ -18,12 +18,17 @@
     padding: max(8px, env(safe-area-inset-top,8px)) 8px;
   }
 
-  /* ── 実機風の本体（9:16固定。高さ基準） ───────────────── */
+  /* ── 実機風の本体（常に viewport に内接する 9:16） ───────────────── */
   .cabinet{
     aspect-ratio: 9 / 16;
-    height: 100vh;
-    width: min(100vw, calc(100vh * 9 / 16));
-    max-width: 100vw;
+
+    /* まずは 100vh 基準で 9:16 を内接させる（どちらが制限でも比率が崩れないペア） */
+    width:  min(100vw, calc(100vh * 9 / 16));
+    height: min(100vh, calc(100vw * 16 / 9));
+
+    /* 対応端末では dvh を優先（Safari/iOS のアドレスバーの高さ変動に追従） */
+    height: min(100dvh, calc(100vw * 16 / 9));
+    width:  min(100vw,  calc(100dvh * 9 / 16));
 
     display:grid; grid-template-rows: 72px 58px 1fr 128px 96px; gap:10px;
     border-radius:22px; padding:10px;
@@ -131,7 +136,7 @@
     text-shadow:0 2px 0 #111, 0 0 10px rgba(255,255,255,.18);
   }
 
-  /* ── 補助パネル（右下） ── */
+  /* ── 補助パネル（右下。フッターと重ならない高さ） ── */
   .aux{
     position:absolute; right:12px; bottom:142px; width: min(36%, 300px);
     display:grid; gap:8px; pointer-events:none;
@@ -249,7 +254,7 @@ function drawBG(){
 drawBG();
 app.ticker.add(()=>{ for(const s of bgLayer.children.slice(1)){ s.y-=s.v; if(s.y<-10) s.y=app.renderer.height+10; } });
 
-/** ===================== Symbols (全て自前描画テクスチャ) ===================== */
+/** ===================== Symbols (自前描画テクスチャ) ===================== */
 const TEX_SIZE=220;
 function texFrom(g){
   const t = app.renderer.generateTexture(g,{resolution:2, scaleMode:PIXI.SCALE_MODES.LINEAR});
@@ -280,25 +285,19 @@ function makeBAR(){
   c.addChild(plate,txt); return texFrom(c);
 }
 function makeBELL(){
-  const c=plateBase();
-  const g=new PIXI.Graphics();
-  // 本体
+  const c=plateBase(); const g=new PIXI.Graphics();
   g.beginLinearGradientFill([0x7a5a00,0xf6c94a,0x7a5a00],[0,0.6,1],0,40,0,170);
   g.drawRoundedRect(50,70,120,90,30).endFill();
-  // 突起＆台座
   g.beginFill(0xf8de7a).drawEllipse(110,70,26,12).endFill();
   g.beginFill(0x6f5a20).drawRoundedRect(44,150,132,16,8).endFill();
   c.addChild(g); return texFrom(c);
 }
 function makeCHERRY(){
   const c=plateBase(); const g=new PIXI.Graphics();
-  // 実
   g.beginFill(0xff244a).drawCircle(92,126,34).endFill();
   g.beginFill(0xff3a62).drawCircle(126,126,34).endFill();
-  // ハイライト
   g.beginFill(0xffffff,.5).drawCircle(82,112,10).endFill();
   g.beginFill(0xffffff,.5).drawCircle(116,112,10).endFill();
-  // 茎 & 葉
   g.lineStyle(6,0x2e7f3f).moveTo(109,95).bezierCurveTo(120,70,140,70,150,86);
   g.beginFill(0x3fae56).drawEllipse(150,92,18,10).endFill();
   c.addChild(g); return texFrom(c);
@@ -377,7 +376,6 @@ function layoutReels(){
     reels.push({c:rc, vy:0, spinning:false});
   }
 
-  // 仕切り線(鏡面)
   const gloss=new PIXI.Graphics().lineStyle(2,0x2e4578,1);
   gloss.moveTo(REEL_W+GAP/2, -6).lineTo(REEL_W+GAP/2, baseH+6);
   gloss.moveTo(REEL_W*2+GAP*1.5, -6).lineTo(REEL_W*2+GAP*1.5, baseH+6);
@@ -385,7 +383,7 @@ function layoutReels(){
 }
 layoutReels(); app.renderer.on('resize', layoutReels);
 
-/** ===================== Spin Control（穴なし・比率安定） ===================== */
+/** ===================== Spin Control ===================== */
 function advance(dt){
   for(const r of reels){
     if(!r.spinning) continue;
@@ -487,7 +485,7 @@ const q=[]; let draining=false; let PACE_MS=180;
 function enqueue(kind,payload){ if(kind==='bonus'&&q.length>=1) q.splice(1,0,{kind,payload}); else q.push({kind,payload}); if(!draining) drain(); }
 async function drain(){ draining=true; while(q.length){ const job=q.shift(); if(job.kind==='event') await handleEvent(job.payload); else await handleBonus(job.payload); await sleep(PACE_MS); } draining=false; }
 
-/* Lua原子の進捗 */
+/* ボーナス進捗（Lua原子と同期） */
 let THRESHOLD=10;
 socket.on('bonus:progress', p=>{
   THRESHOLD=Number(p?.threshold||10);
@@ -496,7 +494,7 @@ socket.on('bonus:progress', p=>{
   mBonus.textContent = `${done}/${THRESHOLD}`;
 });
 
-/* リモート設定のペース反映（前回実装） */
+/* リモート設定（paceMs）反映 */
 socket.on('config:update', cfg=>{
   if(typeof cfg?.paceMs==='number') PACE_MS=Math.max(80,Math.min(800,Math.floor(cfg.paceMs)));
 });

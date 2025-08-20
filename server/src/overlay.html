@@ -17,7 +17,11 @@
 
     /* ── 実機っぽい筐体レイアウト（9:16） ───────────────────────── */
     .cabinet{
-      width:min(100vw,56.25vh); height:min(177.78vw,100vh); aspect-ratio:9/16;
+      /* 片側のみ制約して aspect-ratio に任せる：常に正しい9:16 */
+      aspect-ratio: 9 / 16;
+      width: min(100vw, calc(100vh * 9 / 16)); /* 横は画面幅以内＆縦から計算 */
+      /* height は aspect-ratio から自動算出 */
+
       display:grid; grid-template-rows: 64px 54px 1fr 120px 92px; gap:10px;
       background:linear-gradient(180deg,#0a0f16,#080c12);
       border-radius:22px; padding:10px;
@@ -28,6 +32,8 @@
         0 18px 40px rgba(0,0,0,.8);
       position:relative; overflow:hidden;
     }
+
+
     .bezel{position:absolute; inset:0; border-radius:22px; pointer-events:none;}
     .bezel::before{ /* クローム外枠の反射 */
       content:""; position:absolute; inset:0;

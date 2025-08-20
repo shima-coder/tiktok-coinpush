@@ -16,11 +16,12 @@
     .frame{position:fixed; inset:0; display:flex; align-items:center; justify-content:center; padding:max(8px, env(safe-area-inset-top,8px));}
 
     /* ── 実機っぽい筐体レイアウト（9:16） ───────────────────────── */
+    /* ── 実機っぽい筐体レイアウト（9:16） ───────────────────────── */
     .cabinet{
-      /* 片側のみ制約して aspect-ratio に任せる：常に正しい9:16 */
       aspect-ratio: 9 / 16;
-      width: min(100vw, calc(100vh * 9 / 16)); /* 横は画面幅以内＆縦から計算 */
-      /* height は aspect-ratio から自動算出 */
+      height: 100vh;                                   /* 高さを基準に決める */
+      width: min(100vw, calc(100vh * 9 / 16));         /* 幅は9:16から算出しつつ 100vw を超えない */
+      max-width: 100vw;                                 /* 念のためのガード */
 
       display:grid; grid-template-rows: 64px 54px 1fr 120px 92px; gap:10px;
       background:linear-gradient(180deg,#0a0f16,#080c12);
@@ -153,9 +154,14 @@
 
     /* ── 右下：ログ&ランキング（最小限） ── */
     .aux{
-      position:absolute; right:10px; bottom:10px; width:38%;
+      position:absolute;
+      right:12px;
+      bottom:140px;                 /* フッター(92) + 余白(10) + パネル間(約) を見越して上に配置 */
+      width: min(36%, 280px);       /* 幅を抑えてオーバーラップを防止 */
       display:grid; gap:8px; pointer-events:none;
     }
+
+
     .panel-mini{
       background:linear-gradient(180deg,#0b1018,#080c12); border:1px solid #172235;
       border-radius:12px; padding:8px; pointer-events:auto;
